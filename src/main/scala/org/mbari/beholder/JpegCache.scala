@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential.
+ * via any medium is strictly prohibited. Proprietary and confidential. 
  */
 
 package org.mbari.beholder
@@ -17,6 +17,12 @@ import java.time.Duration
 import org.mbari.beholder.etc.jdk.PathUtil
 import org.mbari.beholder.etc.jdk.DurationUtil
 import java.util.EnumSet
+import scala.collection.Searching.Found
+import java.nio.file.Paths
+import scala.util.chaining.*
+import java.util.concurrent.atomic.AtomicLong
+import java.time.Instant
+import scala.jdk.CollectionConverters.*
 
 /**
  * Information about the source of a JPEG
@@ -27,7 +33,13 @@ import java.util.EnumSet
  * @param path
  *   The local path to the jpeg file
  */
-case class Jpeg(videoUrl: URL, duration: Duration, path: Path)
+case class Jpeg(
+  videoUrl: URL, 
+  duration: Duration, 
+  path: Path, 
+  created: Instant = Instant.now(),
+  sizeBytes: Option[Long] = None
+)
 
 object Jpeg:
 
@@ -65,40 +77,76 @@ object Jpeg:
         .map(videoUrl =>
           val filename = PathUtil.dropExtension(file).replace("_", ":")
           val duration = DurationUtil.fromHMS(filename)
-          Jpeg(videoUrl, duration, file)
+          val size = if (Files.isRegularFile(file)) Some(Files.size(file)) else None
+          Jpeg(videoUrl, duration, file, sizeBytes = size)
         )
     else None
 
-class JpegCache(root: Path):
+  private val fakeUrl = new URL("http://www.mbari.org")
+  private val fakePath = Paths.get("/foo/bar.jpg")
+
+  def fake(duration: Duration): Jpeg = Jpeg(fakeUrl, duration, fakePath)
+
+class JpegCache(root: Path, maxSizeMB: Long, cacheClearSize: Int = 100):
 
   require(Files.isDirectory(root), "root must be a directory")
   require(Files.isWritable(root), "root must be writable")
 
-  val cache: ConcurrentHashMap[URL, ConcurrentHashMap[DurationString, Path]] =
+  private given jpegOrdering: Ordering[Jpeg] = Ordering.by(_.duration)
+
+  private val cache: ConcurrentHashMap[URL, List[Jpeg]] =
     new ConcurrentHashMap()
 
-  def get(url: URL, duration: DurationString): Option[Path] =
-    Option(cache.get(url)) match
-      case Some(urlCache) => Option(urlCache.get(duration))
-      case None           => None
+  private val cacheSizeMB: AtomicLong = AtomicLong()
 
-  def get(url: URL, duration: Duration): Option[Path] =
-    get(url, DurationString(duration))
+  def get(jpeg: Jpeg): Option[Jpeg] = get(jpeg.videoUrl, jpeg.duration)
 
-  def put(url: URL, duration: DurationString, path: Path): Either[Throwable, Path] = synchronized {
-    if (PathUtil.isJpeg(path))
-      Option(cache.get(url)) match
-        case Some(urlCache) => Right(urlCache.put(duration, path))
-        case None           =>
-          val urlCache = new ConcurrentHashMap[DurationString, Path]
-          urlCache.put(duration, path)
-          cache.put(url, urlCache)
-          Right(path)
-    else Left(new IllegalArgumentException(s"$path is not a jpeg"))
+  def get(url: URL, duration: DurationString): Option[Jpeg] =
+    get(url, duration)
+
+  def get(url: URL, duration: Duration): Option[Jpeg] =
+    Option(cache.get(url)) match 
+      case None => None
+      case Some(jpegs) => 
+        jpegs.search(Jpeg.fake(duration))(jpegOrdering) match 
+          case Found(i) => Some(jpegs(i))
+          case _ => None
+
+  def put(jpeg: Jpeg): Jpeg = synchronized {
+    val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.duration)
+    cache.put(jpeg.videoUrl, newList)
+    jpeg.sizeBytes.foreach(s => {
+      val newCacheSizeMB = cacheSizeMB.addAndGet(s)
+
+    })
+    jpeg
   }
 
-  def put(url: URL, duration: Duration, path: Path): Either[Throwable, Path] =
-    put(url, DurationString(duration), path)
+
+
+  def freeDisk(currentSizeMB: Long): Unit = 
+    if (currentSizeMB > maxSizeMB)
+      synchronized {
+
+        cache
+          .asScala
+          .values
+          .flatten
+          .flatMap(_.sizeBytes)
+          .map(_ / 1048576)
+      }
+
+  def put(url: URL, duration: Duration, path: Path): Option[Jpeg] = 
+    Jpeg.fromPath(root, path)
+      .map(jpeg => {
+        put(jpeg)
+        jpeg
+      })
+
+  def put(url: URL, duration: DurationString, path: Path): Option[Jpeg] =
+    put(url, duration, path)
+
+
 
   def rescan(): Unit = synchronized {
     cache.clear()
@@ -107,11 +155,7 @@ class JpegCache(root: Path):
           file: Path,
           attrs: java.nio.file.attribute.BasicFileAttributes
       ): java.nio.file.FileVisitResult =
-        if (!Files.isDirectory(file) && PathUtil.isJpeg(file))
-          Jpeg
-            .fromPath(root, file)
-            .foreach(jpeg => put(jpeg.videoUrl, jpeg.duration, jpeg.path))
-          java.nio.file.FileVisitResult.CONTINUE
-        else java.nio.file.FileVisitResult.CONTINUE
+        Jpeg.fromPath(root, file).foreach(j => put(j.videoUrl, j.duration, j.path))
+        java.nio.file.FileVisitResult.CONTINUE
     Files.walkFileTree(root, visitor)
   }
