@@ -11,6 +11,9 @@ import java.time.Duration
 
 object DurationUtil:
 
+  /**
+   * Format a duration as hh:mm:ss.sss
+   */
   def toHMS(duration: Duration): String =
     val h  = duration.toHoursPart
     val m  = duration.toMinutesPart
@@ -18,6 +21,9 @@ object DurationUtil:
     val ms = duration.toMillisPart
     f"$h%02d:$m%02d:$s%02d.$ms%03d"
 
+  /**
+   * Parse a duration from a string of "hh:mm:ss.sss"
+   */
   def fromHMS(hms: String): Duration =
     val parts = hms.split(":")
     val h     = parts(0).toInt

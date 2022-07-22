@@ -11,5 +11,9 @@ import zio.{Unsafe, ZIO}
 
 object ZioUtil:
 
+  /**
+   * Runs a zio app using the default runtime. Throws an 
+   * exception if something bombs.
+   */
   def unsafeRun[E, A](app: ZIO[Any, E, A]): A =
     Unsafe.unsafe(zio.Runtime.default.unsafe.run(app).getOrThrowFiberFailure())
