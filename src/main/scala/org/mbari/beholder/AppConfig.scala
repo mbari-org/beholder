@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder
@@ -21,3 +21,7 @@ object AppConfig:
 
   object Http:
     val Port: Int = Config.getInt("beholder.http.port")
+
+  object Cache:
+    val sizeMb: Int     = Config.getInt("beholder.cache.size")
+    val freePct: Double = Config.getDouble("beholder.cache.freepct")

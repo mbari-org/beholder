@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder.etc.ffmpeg
@@ -12,9 +12,9 @@ import org.mbari.beholder.etc.jdk.DurationUtil
 import scala.util.Try
 
 /**
- * opaque wrapper around duration strings formatted as hh:mm:ss.sss. This is the 
- * elapsedTime format used by FFMpeg
- * 
+ * opaque wrapper around duration strings formatted as hh:mm:ss.sss. This is the elapsedTime format
+ * used by FFMpeg
+ *
  * Added so we don't have raw string types in Cache requests.
  */
 object DurationString:

@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder
@@ -20,6 +20,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
+import java.nio.file.Path
+import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
 
 @Command(
   description = Array("Start the server"),
@@ -35,8 +37,26 @@ class MainRunner extends Callable[Int]:
   )
   private var port: Int = AppConfig.Http.Port
 
+  @Opt(
+    names = Array("-c", "--cachesize"),
+    description = Array("The maximum allowed size in MB of the image cache")
+  )
+  private var cacheSizeMB = AppConfig.Cache.sizeMb
+
+  @Opt(
+    names = Array("-p", "--freepct"),
+    description = Array("The percent of max cache to free when it's full")
+  )
+  private var freePct = AppConfig.Cache.freePct
+
+  @Parameters(
+    paramLabel = "<rootDirectory>",
+    description = Array("The location of the image cache")
+  )
+  private var cacheRoot: Path = _
+
   override def call(): Int =
-    Main.run(port)
+    Main.run(port, cacheRoot, cacheSizeMB, freePct)
     0
 
 object Main:
@@ -53,7 +73,7 @@ object Main:
     println(s)
     new CommandLine(new MainRunner()).execute(args: _*)
 
-  def run(port: Int): Unit =
+  def run(port: Int, cacheRoot: Path, cacheSizeMb: Int, freePct: Double): Unit =
     log.atInfo.log(s"Starting up ${AppConfig.Name} v${AppConfig.Version} on port $port")
 
     given executionContext: ExecutionContextExecutor = ExecutionContext.global
@@ -67,9 +87,15 @@ object Main:
     val corsHandler = CorsHandler.create("*")
     router.route().handler(corsHandler)
 
+    val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
+    val jpegCapture      = JpegCapture(jpegCache)
+    val captureEndpoints = CaptureEndpoints(jpegCapture)
+    val swaggerEndpoints = SwaggerEndpoints(captureEndpoints)
+    val allEndpointImpls = captureEndpoints.allImpl ++ swaggerEndpoints.allImpl
+
     // Add Tapir endpoints
-    // for endpoint <- allEndpointImpls do
-    //   val attach = VertxFutureServerInterpreter().route(endpoint)
-    //   attach(router)
+    for endpoint <- allEndpointImpls do
+      val attach = VertxFutureServerInterpreter().route(endpoint)
+      attach(router)
 
     Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)

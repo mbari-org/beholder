@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder.etc.ffmpeg
@@ -19,9 +19,12 @@ object FfmpegUtil:
 
   /**
    * Capture a frame from a video at a given time and save it to a file.
-   * @param videoUrl The video to fetch from
-   * @param elapsedTime The time into the video to grab a frame
-   * @param target The location to save the image to
+   * @param videoUrl
+   *   The video to fetch from
+   * @param elapsedTime
+   *   The time into the video to grab a frame
+   * @param target
+   *   The location to save the image to
    */
   def frameCapture(videoUrl: URL, elapsedTime: Duration, target: Path): Either[Throwable, Path] =
     val time = DurationUtil.toHMS(elapsedTime)

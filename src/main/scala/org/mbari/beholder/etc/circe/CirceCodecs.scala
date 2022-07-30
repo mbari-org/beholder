@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder.etc.circe
@@ -12,6 +12,8 @@ import io.circe.generic.semiauto._
 import scala.util.Try
 import java.net.URL
 import org.mbari.beholder.util.HexUtil
+import org.mbari.beholder.api.{NotFound, ServerError, StatusMsg, Unauthorized}
+import org.mbari.beholder.api.CaptureRequest
 
 object CirceCodecs:
 
@@ -28,6 +30,21 @@ object CirceCodecs:
   given urlEncoder: Encoder[URL] = Encoder
     .encodeString
     .contramap(_.toString)
+
+  given Decoder[StatusMsg] = deriveDecoder
+  given Encoder[StatusMsg] = deriveEncoder
+
+  given Decoder[NotFound] = deriveDecoder
+  given Encoder[NotFound] = deriveEncoder
+
+  given Decoder[ServerError] = deriveDecoder
+  given Encoder[ServerError] = deriveEncoder
+
+  given Decoder[Unauthorized] = deriveDecoder
+  given Encoder[Unauthorized] = deriveEncoder
+
+  given Decoder[CaptureRequest] = deriveDecoder
+  given Encoder[CaptureRequest] = deriveEncoder
 
   private val printer = Printer.noSpaces.copy(dropNullValues = true)
 

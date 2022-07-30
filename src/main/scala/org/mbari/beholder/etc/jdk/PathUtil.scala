@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder.etc.jdk
@@ -17,9 +17,12 @@ object PathUtil:
 
   /**
    * Checks if a path is a child of another path
-   * @param parent The parent directory
-   * @param child A child directory of file
-   * @return true if child is contained under parent
+   * @param parent
+   *   The parent directory
+   * @param child
+   *   A child directory of file
+   * @return
+   *   true if child is contained under parent
    */
   def isChild(parent: Path, child: Path): Boolean =
     val parentPath = parent.toAbsolutePath.normalize()
@@ -28,8 +31,10 @@ object PathUtil:
 
   /**
    * Simple check of a files extension
-   * @param path The file to check
-   * @return true if the path is a file and it has a .jpg or .jpeg extension
+   * @param path
+   *   The file to check
+   * @return
+   *   true if the path is a file and it has a .jpg or .jpeg extension
    */
   def isJpeg(path: Path): Boolean =
     if (Files.isDirectory(path)) false
@@ -39,9 +44,10 @@ object PathUtil:
 
   /**
    * Grabs the filename without an extension from a path
-   * @param path The path to parse
-   * @return The filename without an extension. If the path is a directory an empty string 
-   *   is returned
+   * @param path
+   *   The path to parse
+   * @return
+   *   The filename without an extension. If the path is a directory an empty string is returned
    */
   def dropExtension(path: Path): String =
     if (Files.isDirectory(path)) ""

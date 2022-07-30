@@ -2,7 +2,7 @@
  * Copyright (c) Monterey Bay Aquarium Research Institute 2021
  *
  * beholder code is non-public software. Unauthorized copying of this file,
- * via any medium is strictly prohibited. Proprietary and confidential. 
+ * via any medium is strictly prohibited. Proprietary and confidential.
  */
 
 package org.mbari.beholder
@@ -21,9 +21,10 @@ import org.mbari.beholder.util.NumberUtil
  *   The elapsed time into the video that the jpeg was taken
  * @param path
  *   The local path to the jpeg file
- * @param created When the jpeg was created. Used by the cache to determine
- *   which items to drop.
- * @param sizeBytes The size of the jpeg file in bytes
+ * @param created
+ *   When the jpeg was created. Used by the cache to determine which items to drop.
+ * @param sizeBytes
+ *   The size of the jpeg file in bytes
  */
 case class Jpeg(
     videoUrl: URL,
