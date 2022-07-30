@@ -35,17 +35,17 @@ class CaptureEndpointsSuite extends munit.FunSuite:
   private val cache = JpegCache(root, 3, .3)
   private val capture = JpegCapture(cache)
 
+  private val videoUrl = TestUtil.bigBuckBunny
+  private val captureRequest = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+  private val captureEndpoint = CaptureEndpoints(capture, AppConfig.Api.Key)
+
+  val backendStub: SttpBackend[Future, Any] = TapirStubInterpreter(SttpBackendStub.asynchronousFuture)
+    .whenServerEndpoint(captureEndpoint.captureImpl)
+    .thenRunLogic()
+    .backend()
 
   test("/capture") {
-    val videoUrl = TestUtil.bigBuckBunny
-    val captureRequest = CaptureRequest(videoUrl.toExternalForm(), 1234L)
-    val captureEndpoint = CaptureEndpoints(capture, AppConfig.Api.Key)
-
-    val backendStub: SttpBackend[Future, Any] = TapirStubInterpreter(SttpBackendStub.asynchronousFuture)
-      .whenServerEndpoint(captureEndpoint.captureImpl)
-      .thenRunLogic()
-      .backend()
-
+    
     val response = basicRequest
       .post(uri"http://test.com/capture")
       .header("X-Api-Key", AppConfig.Api.Key)
@@ -54,7 +54,17 @@ class CaptureEndpointsSuite extends munit.FunSuite:
 
     val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
     assertEquals(result.code.code, 200)
-
     
+  }
+
+  test("/capture with invalid X-Api-Key") {
+    val response = basicRequest
+      .post(uri"http://test.com/capture")
+      .header("X-Api-Key", "bad key")
+      .body(captureRequest.stringify)
+      .send(backendStub)
+
+    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
+    assertEquals(result.code.code, 401)
   }
   
