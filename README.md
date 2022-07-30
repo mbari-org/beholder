@@ -1,6 +1,19 @@
 # beholder
 
-MBARI sbt project compiled with Scala 3
+![MBARI logo](docs/images/logo-mbari-3b.png)
+
+Beholder extracts individual frames from videos as jpegs. The format of the post request is:
+
+```text
+POST http://localhost:8080/capture
+X-Api-Key: foo
+Accept: image/jpeg
+
+{
+  "videoUrl": "http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1436/D1436_20220322T132758Z_h264.mp4",
+  "elapsedTimeMillis": 1234
+}
+```
 
 ## Usage
 
