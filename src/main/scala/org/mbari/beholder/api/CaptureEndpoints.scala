@@ -18,13 +18,14 @@ import org.mbari.beholder.JpegCapture
 import java.net.URL
 import java.nio.file.Files
 
-class CaptureEndpoints(jpegCapture: JpegCapture)(using ec: ExecutionContext) extends Endpoints:
+class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: ExecutionContext)
+    extends Endpoints:
 
   val captureEndpoint =
     baseEndpoint
       .post
       .in("capture")
-      .in(header[String]("X-Api-Key"))
+      .in(header[String]("X-Api-Key").description("Required key for access"))
       .in(jsonBody[CaptureRequest])
       .out(fileBody and header("Content-Type", "image/jpeg"))
       .name("capture")
@@ -33,14 +34,16 @@ class CaptureEndpoints(jpegCapture: JpegCapture)(using ec: ExecutionContext) ext
       .tag("capture")
 
   val captureImpl: ServerEndpoint[Any, Future] =
-    captureEndpoint.serverLogic((xApiKey, captureRequest) =>
-      Future {
-        for
-          url  <- captureRequest.url
-          jpeg <- jpegCapture.capture(url, captureRequest.elapsedTime)
-        yield jpeg.path.toFile
-      }
-    )
+    captureEndpoint
+      .serverLogic((xApiKey, captureRequest) =>
+        Future {
+          for
+            _    <- if (apiKey == xApiKey) Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
+            url  <- captureRequest.url
+            jpeg <- jpegCapture.capture(url, captureRequest.elapsedTime)
+          yield jpeg.path.toFile
+        }
+      )
 
   def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(captureEndpoint)
   def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(captureImpl)

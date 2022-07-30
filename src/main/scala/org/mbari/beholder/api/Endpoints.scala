@@ -25,6 +25,7 @@ trait Endpoints:
     oneOf[ErrorMsg](
       oneOfVariant(statusCode(StatusCode.NotFound).and(jsonBody[NotFound])),
       oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[ServerError])),
-      oneOfVariant(statusCode(StatusCode.Unauthorized).and(jsonBody[Unauthorized]))
+      oneOfVariant(statusCode(StatusCode.Unauthorized).and(jsonBody[Unauthorized])),
+      oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[StatusMsg]))
     )
   )

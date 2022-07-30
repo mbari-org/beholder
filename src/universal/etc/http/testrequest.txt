@@ -1,0 +1,7 @@
+POST http://localhost:8088/capture
+X-Api-Key: foo
+
+{
+  "videoUrl": "http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1436/D1436_20220322T132758Z_h264.mp4",
+  "elapsedTimeMillis": 1234
+}

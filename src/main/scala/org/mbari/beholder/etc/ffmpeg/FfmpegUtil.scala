@@ -37,7 +37,7 @@ object FfmpegUtil:
      -loglevel error  Make quieter
      */
     val cmd  =
-      s"ffmpeg -ss $time -i $videoUrl -frames:v 1 -q:v 1 -hide_banner -loglevel error $target"
+      s"ffmpeg -ss $time -i $videoUrl -frames:v 1 -q:v 1 -hide_banner -loglevel error -y $target"
     Try(cmd.!!) match
       case Success(_) => Right(target)
       case Failure(e) => Left(e)

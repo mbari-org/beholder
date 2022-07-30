@@ -20,11 +20,11 @@ class JpegCaptureSuite extends munit.FunSuite:
 
   test("capture") {
     capture.capture(TestUtil.bigBuckBunny, Duration.ofMillis(1234)) match 
-      case None => fail("Expected an image to be captured and it wasn't")
-      case Some(jpeg0) => // Check values
+      case Left(_) => fail("Expected an image to be captured and it wasn't")
+      case Right(jpeg0) => // Check values
         capture.capture(TestUtil.bigBuckBunny, Duration.ofMillis(1234)) match
-          case None => fail("Expected an image to be in the cache")
-          case Some(jpeg1) =>
+          case Left(_) => fail("Expected an image to be in the cache")
+          case Right(jpeg1) =>
             assertEquals(jpeg1, jpeg0)
   }
   

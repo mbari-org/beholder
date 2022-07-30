@@ -19,6 +19,9 @@ object AppConfig:
   val Version: String =
     Try(getClass.getPackage.getImplementationVersion).getOrElse("0.0.0-SNAPSHOT")
 
+  object Api:
+    val Key: String = Config.getString("beholder.api.key")
+
   object Http:
     val Port: Int = Config.getInt("beholder.http.port")
 
