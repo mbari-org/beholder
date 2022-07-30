@@ -16,6 +16,7 @@ import java.nio.file.Files
 import org.mbari.beholder.etc.jdk.PathUtil
 import org.mbari.beholder.api.ErrorMsg
 import org.mbari.beholder.api.StatusMsg
+import org.mbari.beholder.api.ServerError
 
 class JpegCapture(cache: JpegCache):
 
@@ -32,17 +33,18 @@ class JpegCapture(cache: JpegCache):
       val parent = jpeg.path.getParent()
       if (!Files.exists(parent))
         Files.createDirectories(parent)
-    FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path) match
-      case Left(e)     =>
-        log
-          .withCause(e)
-          .atDebug
-          .log(() =>
-            s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUrl"
-          )
-        Left(StatusMsg(s"Failed to capture frame from $videoUrl at $elapsedTime", 500))
-      case Right(path) =>
-        val sizeBytes = Files.size(path)
-        val theJpeg   = jpeg.copy(path = path, sizeBytes = Some(sizeBytes))
-        cache.put(theJpeg)
-        Right(theJpeg)
+      FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path) match
+        case Left(e)     =>
+          log
+            .withCause(e)
+            .atDebug
+            .log(() =>
+              s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUrl"
+            )
+          Left(StatusMsg(s"Failed to capture frame from $videoUrl at $elapsedTime", 500))
+        case Right(path) =>
+          val sizeBytes = Files.size(path)
+          val theJpeg   = jpeg.copy(path = path, sizeBytes = Some(sizeBytes))
+          cache.put(theJpeg)
+          Right(theJpeg)
+    else Left(ServerError("An invalid cache path was calculated"))
