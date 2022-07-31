@@ -16,6 +16,8 @@ object AppConfig:
 
   val Name: String = "beholder"
 
+  val Description: String = "Framegrab server"
+
   val Version: String =
     Try(getClass.getPackage.getImplementationVersion).getOrElse("0.0.0-SNAPSHOT")
 

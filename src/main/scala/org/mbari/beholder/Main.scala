@@ -23,6 +23,7 @@ import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
 import java.nio.file.Path
 import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
 import java.nio.file.Files
+import org.mbari.beholder.api.HealthEndpoints
 
 @Command(
   description = Array("Start the server"),
@@ -108,8 +109,10 @@ object Main:
     val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
     val jpegCapture      = JpegCapture(jpegCache)
     val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
-    val swaggerEndpoints = SwaggerEndpoints(captureEndpoints)
-    val allEndpointImpls = captureEndpoints.allImpl ++ swaggerEndpoints.allImpl
+    val healthEndpoints  = HealthEndpoints()
+    val swaggerEndpoints = SwaggerEndpoints(captureEndpoints, healthEndpoints)
+    val allEndpointImpls =
+      captureEndpoints.allImpl ++ healthEndpoints.allImpl ++ swaggerEndpoints.allImpl
 
     // Add Tapir endpoints
     for endpoint <- allEndpointImpls do
