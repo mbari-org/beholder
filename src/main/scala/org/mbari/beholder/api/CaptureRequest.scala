@@ -13,6 +13,9 @@ import scala.util.Try
 import sttp.tapir.DecodeResult.Failure
 import scala.util.Success
 
+/**
+ * Case class for deserializing a capture requests JSON body
+ */
 final case class CaptureRequest(videoUrl: String, elapsedTimeMillis: Long):
   lazy val elapsedTime: Duration      = Duration.ofMillis(elapsedTimeMillis)
   lazy val url: Either[ErrorMsg, URL] = Try(URL(videoUrl)) match

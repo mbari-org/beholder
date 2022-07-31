@@ -15,6 +15,9 @@ import sttp.tapir.json.circe.*
 import sttp.tapir.server.ServerEndpoint
 import org.mbari.beholder.etc.circe.CirceCodecs.given
 
+/**
+ * Base class for endpoints in the app
+ */
 trait Endpoints:
   val log = System.getLogger(getClass.getName)
 

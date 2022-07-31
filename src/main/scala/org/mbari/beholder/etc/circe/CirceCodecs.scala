@@ -17,6 +17,9 @@ import org.mbari.beholder.api.CaptureRequest
 import scala.CanEqual.derived
 import org.mbari.beholder.api.HealthStatus
 
+/**
+ * Contains all the circe codecs needed as givens
+ */
 object CirceCodecs:
 
   given byteArrayEncoder: Encoder[Array[Byte]] = new Encoder[Array[Byte]]:

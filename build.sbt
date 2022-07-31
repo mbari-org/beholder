@@ -3,14 +3,16 @@ import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.docker.Cmd
 import Dependencies._
 
+Docker / maintainer           := "Brian Schlining <brian@mbari.org>"
+Docker / packageName          := "mbari/beholder"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
 
 ThisBuild / scalaVersion     := "3.1.3"
-// ThisBuild / version          := "0.0.1"
+ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
-ThisBuild / startYear        := Some(2021)
+ThisBuild / startYear        := Some(2022)
 ThisBuild / versionScheme    := Some("semver-spec")
 
 // Hack to get the apt-get command in the right place in the docker file
