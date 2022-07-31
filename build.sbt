@@ -52,15 +52,6 @@ lazy val root = project
     },
     git.useGitDescribe := true,
     // sbt-header
-    headerLicense := Some(
-      HeaderLicense.Custom(
-        """Copyright (c) Monterey Bay Aquarium Research Institute 2021
-        |
-        |beholder code is non-public software. Unauthorized copying of this file,
-        |via any medium is strictly prohibited. Proprietary and confidential. 
-        |""".stripMargin
-      )
-    ),
     javacOptions ++= Seq("-target", "11", "-source", "11"),
     laikaExtensions := Seq(
       laika.markdown.github.GitHubFlavor, 
