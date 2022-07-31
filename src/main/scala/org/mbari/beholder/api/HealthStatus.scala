@@ -8,6 +8,7 @@
 package org.mbari.beholder.api
 
 import org.mbari.beholder.AppConfig
+import java.net.InetAddress
 
 final case class HealthStatus(
     jdkVersion: String,
@@ -17,7 +18,8 @@ final case class HealthStatus(
     totalMemory: Long,
     application: String = AppConfig.Name,
     version: String = AppConfig.Version,
-    description: String = AppConfig.Description
+    description: String = AppConfig.Description,
+    hostname: String = InetAddress.getLocalHost().getHostName()
 )
 
 object HealthStatus:

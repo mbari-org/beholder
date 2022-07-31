@@ -1,14 +1,29 @@
+import com.typesafe.sbt.packager.docker.CmdLike
+import com.typesafe.sbt.packager.docker.ExecCmd
+import com.typesafe.sbt.packager.docker.Cmd
 import Dependencies._
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
 
 ThisBuild / scalaVersion     := "3.1.3"
-ThisBuild / version          := "0.0.1"
+// ThisBuild / version          := "0.0.1"
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
 ThisBuild / startYear        := Some(2021)
 ThisBuild / versionScheme    := Some("semver-spec")
+
+// Hack to get the apt-get command in the right place in the docker file
+// Inserts apt-get before user is changed to non-root
+def buildDocker(cmds: Seq[CmdLike]): Seq[CmdLike] = {
+  val idx = cmds.indexWhere(_ match {
+    case Cmd("USER", user) => user != "root"
+    case _ => false 
+  })
+  cmds.take(idx) ++ 
+    Seq(Cmd("RUN", "apt-get update && apt-get install -y ffmpeg")) ++
+    cmds.drop(idx)
+}
 
 lazy val root = project
   .in(file("."))
@@ -20,6 +35,13 @@ lazy val root = project
     LaikaPlugin)
   .settings(
     name := "beholder",
+    dockerBaseImage    := "eclipse-temurin:17",
+    dockerCommands := buildDocker(dockerCommands.value),
+    // dockerEntrypoint := Seq("/opt/docker/bin/beholder", "/opt/beholder"),
+    dockerExposedPorts := Seq(8080),
+    dockerExposedVolumes := Seq("/opt/beholder"),
+    dockerRepository := Some("mbari"),
+    dockerUpdateLatest := true,
     // Set version based on git tag. I use "0.0.0" format (no leading "v", which is the default)
     // Use `show gitCurrentTags` in sbt to update/see the tags
     git.gitTagToVersionNumber := { tag: String =>
