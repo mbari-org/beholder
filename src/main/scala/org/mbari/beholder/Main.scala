@@ -16,23 +16,23 @@
 
 package org.mbari.beholder
 
+import io.vertx.core.Vertx
+import io.vertx.ext.web.handler.CorsHandler
+import io.vertx.ext.web.Router
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.Callable
+import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
+import org.mbari.beholder.api.HealthEndpoints
+import org.mbari.beholder.etc.jdk.Logging.given
 import picocli.CommandLine
 import picocli.CommandLine.{Command, Option => Opt, Parameters}
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContextExecutor
-import org.mbari.beholder.etc.jdk.Logging.given
-import io.vertx.core.Vertx
-import io.vertx.ext.web.Router
-import io.vertx.ext.web.handler.CorsHandler
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContextExecutor
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
-import java.nio.file.Path
-import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
-import java.nio.file.Files
-import org.mbari.beholder.api.HealthEndpoints
 
 @Command(
   description = Array("Start the server"),
