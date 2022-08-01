@@ -39,9 +39,9 @@ lazy val root = project
     name := "beholder",
     dockerBaseImage    := "eclipse-temurin:17",
     dockerCommands := buildDocker(dockerCommands.value),
-    // dockerEntrypoint := Seq("/opt/docker/bin/beholder", "/opt/beholder"),
+    dockerEntrypoint := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
     dockerExposedPorts := Seq(8080),
-    dockerExposedVolumes := Seq("/opt/beholder"),
+    dockerExposedVolumes := Seq("/opt/beholder/cache"),
     dockerRepository := Some("mbari"),
     dockerUpdateLatest := true,
     // Set version based on git tag. I use "0.0.0" format (no leading "v", which is the default)

@@ -21,18 +21,26 @@ Accept: image/jpeg
 - `/capture` - Capture a frame from a video
 - `/health` - Health status of the server
 
-## Usage
+## Docker
+
+A docker container can be build and published using `build.sh`
+
+```bash
+docker run -d -p 8080:8080 -v /path/to/cache:/opt/beholder/cache --name beholder --restart=always mbari/beholder
+```
+
+## Development
 
 This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
 
-## Useful Commands
+### Useful Commands
 
 1. `stage` - Build runnable project in `target/universal`
 2. `universal:packageBin` - Build zip files of runnable project in `target/universal`
 3. `laikaSite` - Build documentation, including API docs to `target/docs/site`
 4. `compile` then `scalafmtAll` - Will convert all syntax to new-style, indent based Scala 3.
 
-## Libraries
+### Libraries
 
 - [circe](https://circe.github.io/circe/) for JSON handling
 - [Methanol](https://github.com/mizosoft/methanol) with [Java's HttpClient](https://docs.oracle.com/en/java/javase/17/docs/api/java.net.http/java/net/http/HttpClient.html) for HTTP client
@@ -41,6 +49,6 @@ This is a normal sbt project. You can compile code with `sbt compile`, run it wi
 - [slf4j](http://www.slf4j.org/) with [logback](http://logback.qos.ch/) for logging. Use java.lang.System.Logger
 - [ZIO](https://zio.dev/) for effects
 
-## Notes
+### Notes
 
 Documentation can be added as markdown files in `docs` and will be included automatically when you run `laikaSite`.

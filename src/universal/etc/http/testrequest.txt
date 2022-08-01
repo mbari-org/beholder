@@ -1,4 +1,4 @@
-POST http://localhost:8088/capture
+POST http://localhost:8080/capture
 X-Api-Key: foo
 
 {
