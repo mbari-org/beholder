@@ -54,3 +54,5 @@ This is a normal sbt project. You can compile code with `sbt compile`, run it wi
 ### Notes
 
 Documentation can be added as markdown files in `docs` and will be included automatically when you run `laikaSite`.
+
+[Beholder image](docs/images/beholder.png) © Copyright 2022 Aine Schlining
