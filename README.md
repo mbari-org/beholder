@@ -2,6 +2,8 @@
 
 ![MBARI logo](docs/images/logo-mbari-3b.png)
 
+<img src="docs/images/beholder.png" alt="beholder" width="250"/>
+
 Beholder extracts individual frames from videos as jpegs. The format of the post request is:
 
 ```text
