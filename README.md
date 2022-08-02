@@ -31,6 +31,14 @@ A docker container can be build and published using `build.sh`
 docker run -d -p 8080:8080 -v /path/to/cache:/opt/beholder/cache --name beholder --restart=always mbari/beholder
 ```
 
+### Environment variables 
+
+You can pass any of the following environment variables to the beholder container:
+
+- `BEHOLDER_API_KEY` - The API key to use for authentication for the service (i.e. the `X-Api-Key` header)
+- `BEHOLDER_CACHE_SIZE` - The size of the cache in megabytes (defaults to 500)
+- `BEHOLDER_CACHE_FREEPCT` - The percentage, given as a value between 0 and 1, of cache space to free when the cache is full (defaults to 0.2 (20%))
+
 ## Development
 
 This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
