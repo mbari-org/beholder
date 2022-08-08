@@ -8,7 +8,7 @@ import Dependencies._
 Docker / maintainer           := "Brian Schlining <brian@mbari.org>"
 Docker / packageName          := "mbari/beholder"
 Global / onChangedBuildSource := ReloadOnSourceChanges
-Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
+// Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
 
 ThisBuild / scalaVersion     := "3.1.3"
 ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
@@ -54,7 +54,7 @@ lazy val root = project
     },
     git.useGitDescribe := true,
     // sbt-header
-    javacOptions ++= Seq("-target", "11", "-source", "11"),
+    javacOptions ++= Seq("-target", "17", "-source", "17"),
     laikaExtensions := Seq(
       laika.markdown.github.GitHubFlavor, 
       laika.parse.code.SyntaxHighlighting
