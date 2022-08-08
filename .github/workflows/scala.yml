@@ -26,7 +26,7 @@ jobs:
         cache: 'sbt'
     - name: Build site
       run: sbt laikaSite
-    - name: Upload site zip
+    - name: Upload site
       uses: actions/upload-pages-artifact@v1.0.1
       with: 
         path: ./target/docs/site
