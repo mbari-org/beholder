@@ -110,7 +110,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
    *   The stored jpeg
    */
   def put(jpeg: Jpeg): Jpeg = synchronized {
-    // By changing the data to now, it's always the last item in the list, so 
+    // By changing the data to now, it's always the last item in the list, so
     // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
     val newJpeg = jpeg.copy(created = Instant.now())
     // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)

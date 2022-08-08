@@ -58,9 +58,9 @@ lazy val root = project
       laika.parse.code.SyntaxHighlighting
     ),
     laikaIncludeAPI := true,
-    resolvers ++= Seq(
-      Resolver.githubPackages("mbari-org", "maven")
-    ),
+    // resolvers ++= Seq(
+    //   Resolver.githubPackages("mbari-org", "maven")
+    // ),
     libraryDependencies ++= Seq(
       circeCore,
       circeGeneric,
