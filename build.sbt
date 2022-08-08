@@ -1,3 +1,5 @@
+import laika.theme.config.Color
+import laika.helium.Helium
 import com.typesafe.sbt.packager.docker.CmdLike
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.docker.Cmd
