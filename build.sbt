@@ -1,3 +1,6 @@
+import laika.ast
+import laika.helium.config.HeliumIcon
+import laika.helium.config.IconLink
 import laika.theme.config.Color
 import laika.helium.Helium
 import com.typesafe.sbt.packager.docker.CmdLike
@@ -55,11 +58,20 @@ lazy val root = project
     git.useGitDescribe := true,
     // sbt-header
     javacOptions ++= Seq("-target", "17", "-source", "17"),
+    laikaTheme := Helium.defaults
+      .site
+      .topNavigationBar(
+        navLinks = Seq(
+          IconLink.external("https://github.com/mbari-org/beholder", HeliumIcon.github),
+          IconLink.internal(ast.Path.Root / "api" / "index.html", HeliumIcon.api)
+        )
+      ).build, 
     laikaExtensions := Seq(
       laika.markdown.github.GitHubFlavor, 
       laika.parse.code.SyntaxHighlighting
     ),
     laikaIncludeAPI := true,
+    
     // resolvers ++= Seq(
     //   Resolver.githubPackages("mbari-org", "maven")
     // ),
