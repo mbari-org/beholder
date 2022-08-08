@@ -19,7 +19,7 @@ Accept: image/jpeg
 }
 ```
 
-## Documentiation
+## Documentation
 
 Documentation is at <https://mbari-org.github.io/beholder/>
 
