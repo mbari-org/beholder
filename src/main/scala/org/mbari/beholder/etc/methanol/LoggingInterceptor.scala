@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.mbari.beholder.ext.methanol
+package org.mbari.beholder.etc.methanol
 
 import com.github.mizosoft.methanol.Methanol
 import com.github.mizosoft.methanol.Methanol.Interceptor.Chain
