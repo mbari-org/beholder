@@ -23,7 +23,7 @@ Accept: image/jpeg
 
 ## Docker
 
-A docker container can be built and published using `build.sh`. Beholder can be used by anyone using docker as follows:
+A docker container can be built and published using [build.sh](https://github.com/mbari-org/beholder/blob/main/build.sh). Beholder can be used by anyone using docker as follows:
 
 ```bash
 docker run -d \
