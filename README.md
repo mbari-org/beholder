@@ -1,5 +1,7 @@
 # beholder
 
+![Build](https://github.com/github/docs/actions/workflows/test.yml/badge.svg)
+
 ![MBARI logo](src/docs/images/logo-mbari-3b.png)
 
 <img src="src/docs/images/beholder.png" alt="beholder" width="250"/>
