@@ -24,5 +24,5 @@ jobs:
       - name: Set up FFmpeg
         uses: FedericoCarboni/setup-ffmpeg@v1
         id: setup-ffmpeg
-      - name: Compile Scala code
-        run: sbt compile
+      - name: Run unit tests
+        run: sbt test
