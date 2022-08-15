@@ -18,6 +18,7 @@ package org.mbari.beholder
 
 import java.nio.file.Files
 import java.time.Duration
+import org.junit.Assert.*
 
 class JpegCaptureSuite extends munit.FunSuite:
 
@@ -34,6 +35,12 @@ class JpegCaptureSuite extends munit.FunSuite:
         capture.capture(TestUtil.bigBuckBunny, Duration.ofMillis(1234)) match
           case Left(_) => fail("Expected an image to be in the cache")
           case Right(jpeg1) =>
-            assertEquals(jpeg1, jpeg0)
+            // Cache changes creationDate. So we can't just compare jpeg1 and jpeg2.
+            assertEquals(jpeg1.elapsedTime, jpeg0.elapsedTime)
+            assertEquals(jpeg1.path, jpeg0.path)
+            assertTrue(jpeg1.sizeBytes.isDefined)
+            assertTrue(jpeg0.sizeBytes.isDefined)
+            assertEquals(jpeg1.sizeBytes.get, jpeg0.sizeBytes.get)
+            assertEquals(jpeg1.videoUrl, jpeg0.videoUrl)
   }
   

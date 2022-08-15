@@ -44,7 +44,13 @@ class JpegCacheSuite extends munit.FunSuite:
     cache.get(jpeg1) match 
       case None => fail("We did not get any jpeg back. That's unexpected!")
       case Some(jpeg2) => 
-        assertEquals(jpeg2, jpeg1)
+        // Cache changes creationDate. So we can't just compare jpeg1 and jpeg2.
+        assertEquals(jpeg2.elapsedTime, jpeg1.elapsedTime)
+        assertEquals(jpeg2.path, jpeg1.path)
+        assertTrue(jpeg2.sizeBytes.isDefined)
+        assertTrue(jpeg1.sizeBytes.isDefined)
+        assertEquals(jpeg2.sizeBytes.get, jpeg1.sizeBytes.get)
+        assertEquals(jpeg2.videoUrl, jpeg1.videoUrl)
     cache.clearCache()
   }
 
