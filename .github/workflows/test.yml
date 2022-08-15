@@ -1,4 +1,4 @@
-name: Run Unit Tests
+name: Unit Tests
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
@@ -22,7 +21,8 @@ jobs:
           java-version: "17"
           distribution: "temurin"
           cache: "sbt"
-      - name: Run tests
-        run: sbt test
-
-
+      - name: Set up FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v1
+        id: setup-ffmpeg
+      - name: Compile Scala code
+        run: sbt compile

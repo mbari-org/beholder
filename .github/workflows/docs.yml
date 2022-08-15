@@ -1,4 +1,4 @@
-name: Scala Laika Site generator
+name: Site Generator
 
 on:
   push:
