@@ -1,6 +1,6 @@
 # beholder
 
-![Build](https://github.com/github/docs/actions/workflows/test.yml/badge.svg)
+![Build](https://github.com/mbari-org/beholder/actions/workflows/test.yml/badge.svg)
 
 ![MBARI logo](src/docs/images/logo-mbari-3b.png)
 
