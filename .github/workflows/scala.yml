@@ -2,35 +2,34 @@ name: Scala Laika Site generator
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
   pages: write
-  id-token: write 
+  id-token: write
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: 'sbt'
-    - name: Build site
-      run: sbt laikaSite
-    - name: Upload site
-      uses: actions/upload-pages-artifact@v1.0.1
-      with: 
-        path: ./target/docs/site
-      
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "sbt"
+      - name: Build site
+        run: sbt laikaSite
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v1.0.1
+        with:
+          path: ./target/docs/site
+
   deploy:
     environment:
       name: github-pages
