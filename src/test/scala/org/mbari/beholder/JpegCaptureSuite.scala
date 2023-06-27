@@ -28,7 +28,7 @@ class JpegCaptureSuite extends munit.FunSuite:
   val capture = JpegCapture(cache)
 
 
-  test("capture") {
+  test("capture"):
     capture.capture(TestUtil.bigBuckBunny, Duration.ofMillis(1234)) match 
       case Left(_) => fail("Expected an image to be captured and it wasn't")
       case Right(jpeg0) => // Check values
@@ -42,5 +42,4 @@ class JpegCaptureSuite extends munit.FunSuite:
             assertTrue(jpeg0.sizeBytes.isDefined)
             assertEquals(jpeg1.sizeBytes.get, jpeg0.sizeBytes.get)
             assertEquals(jpeg1.videoUrl, jpeg0.videoUrl)
-  }
   

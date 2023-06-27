@@ -26,7 +26,7 @@ class FfmpegUtilSuite extends munit.FunSuite:
 
   private val videoUrl = TestUtil.bigBuckBunny
   
-  test("frameCapture") {
+  test("frameCapture"):
     val path = Paths.get("target", "trashme.jpg")
     FfmpegUtil.frameCapture(videoUrl, Duration.ofMillis(250), path) match
       case Left(e) =>
@@ -36,4 +36,3 @@ class FfmpegUtilSuite extends munit.FunSuite:
         assertTrue(s"File was not created at $path", exists)
     if (Files.exists(path))
           Files.delete(path)
-  }

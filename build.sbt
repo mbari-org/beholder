@@ -13,7 +13,7 @@ Docker / packageName          := "mbari/beholder"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 // Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
 
-ThisBuild / scalaVersion     := "3.1.3"
+ThisBuild / scalaVersion     := "3.3.0"
 ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
@@ -88,7 +88,6 @@ lazy val root = project
       tapirStubServer % Test,
       tapirSwagger,
       tapirCirce,
-      tapirCirceClient % Test,
       tapirVertx,
       typesafeConfig,
       zio

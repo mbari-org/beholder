@@ -16,13 +16,17 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-import java.time.Duration
-import java.nio.file.Path
 import java.net.URL
+import java.nio.file.Path
+import java.time.Duration
 import org.mbari.beholder.etc.jdk.DurationUtil
-import sys.process._
+import org.mbari.beholder.etc.jdk.Logging.given
 import scala.util.{Failure, Success, Try}
+import sys.process.*
 
+/**
+ * Utility functions for using ffmpeg. MOre docs at https://trac.ffmpeg.org/wiki/Seeking
+ */
 object FfmpegUtil:
   private val log = System.getLogger(getClass.getName())
 
@@ -34,8 +38,16 @@ object FfmpegUtil:
    *   The time into the video to grab a frame
    * @param target
    *   The location to save the image to
+   * @param accurate
+   *   By default ffmpeg will return "frame accutrate" capture. If you want the nearest preceding
+   *   keyframe, use false
    */
-  def frameCapture(videoUrl: URL, elapsedTime: Duration, target: Path): Either[Throwable, Path] =
+  def frameCapture(
+      videoUrl: URL,
+      elapsedTime: Duration,
+      target: Path,
+      accurate: Boolean = true
+  ): Either[Throwable, Path] =
     val time = DurationUtil.toHMS(elapsedTime)
     /*
      -ss Seek.        This needs to be first. If it's after -i the capture is MUCH slower
@@ -45,8 +57,10 @@ object FfmpegUtil:
      -hide_banner     Make quiet
      -loglevel error  Make quieter
      */
+    val nas  = if !accurate then "-noaccurate_seek" else ""
     val cmd  =
-      s"ffmpeg -ss $time -i $videoUrl -frames:v 1 -q:v 1 -hide_banner -loglevel error -y $target"
+      s"ffmpeg -ss $time ${nas} -i $videoUrl -frames:v 1 -q:v 1 -hide_banner -loglevel error -y $target"
+    log.atWarn.log(() => s"Executing $cmd")
     Try(cmd.!!) match
       case Success(_) => Right(target)
       case Failure(e) => Left(e)

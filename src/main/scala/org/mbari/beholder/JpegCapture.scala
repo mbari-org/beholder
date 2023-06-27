@@ -31,18 +31,26 @@ class JpegCapture(cache: JpegCache):
 
   private val log = System.getLogger(getClass.getName)
 
-  def capture(videoUrl: URL, elapsedTime: Duration): Either[ErrorMsg, Jpeg] =
+  def capture(
+      videoUrl: URL,
+      elapsedTime: Duration,
+      accurate: Boolean = true
+  ): Either[ErrorMsg, Jpeg] =
     cache.get(videoUrl, elapsedTime) match
       case Some(jpeg) => Right(jpeg)
-      case None       => grabFrame(videoUrl, elapsedTime)
+      case None       => grabFrame(videoUrl, elapsedTime, accurate)
 
-  private def grabFrame(videoUrl: URL, elapsedTime: Duration): Either[ErrorMsg, Jpeg] =
+  private def grabFrame(
+      videoUrl: URL,
+      elapsedTime: Duration,
+      accurate: Boolean
+  ): Either[ErrorMsg, Jpeg] =
     val jpeg = Jpeg.toPath(cache.root, videoUrl, elapsedTime)
     if (PathUtil.isChild(cache.root, jpeg.path))
       val parent = jpeg.path.getParent()
       if (!Files.exists(parent))
         Files.createDirectories(parent)
-      FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path) match
+      FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path, accurate) match
         case Left(e)     =>
           log
             .withCause(e)

@@ -53,7 +53,7 @@ class CaptureEndpointsSuite extends munit.FunSuite:
     .thenRunLogic()
     .backend()
 
-  test("/capture") {
+  test("/capture"):
     
     val response = basicRequest
       .post(uri"http://test.com/capture")
@@ -64,9 +64,8 @@ class CaptureEndpointsSuite extends munit.FunSuite:
     val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
     assertEquals(result.code.code, 200)
     
-  }
 
-  test("/capture with invalid X-Api-Key") {
+  test("/capture with invalid X-Api-Key"):
     val response = basicRequest
       .post(uri"http://test.com/capture")
       .header("X-Api-Key", "bad key")
@@ -75,5 +74,17 @@ class CaptureEndpointsSuite extends munit.FunSuite:
 
     val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
     assertEquals(result.code.code, 401)
-  }
+
+  test("/capture?accurate=false"):
+
+    val captureRequest1 = CaptureRequest(videoUrl.toExternalForm(), 2345)
+    
+    val response = basicRequest
+      .post(uri"http://test.com/capture?accurate=false")
+      .header("X-Api-Key", AppConfig.Api.Key)
+      .body(captureRequest1.stringify)
+      .send(backendStub)
+
+    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
+    assertEquals(result.code.code, 200)
   

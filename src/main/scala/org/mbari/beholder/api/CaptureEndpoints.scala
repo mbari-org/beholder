@@ -34,22 +34,30 @@ class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: Execu
     baseEndpoint
       .post
       .in("capture")
+      .in(
+        query[Option[Boolean]]("accurate").description(
+          "If true, capture at the exact time. (default: true)"
+        )
+      )
       .in(header[String]("X-Api-Key").description("Required key for access"))
       .in(jsonBody[CaptureRequest])
       .out(fileBody and header("Content-Type", "image/jpeg"))
       .name("capture")
-      .description("Capture a frame from a video at a given elapsed time")
+      .description(
+        "Capture a frame from a video at a given elapsed time or pull if from the cache if it exists"
+      )
       .summary("Frame capture from a video")
       .tag("capture")
 
   val captureImpl: ServerEndpoint[Any, Future] =
     captureEndpoint
-      .serverLogic((xApiKey, captureRequest) =>
+      .serverLogic((accurateOpt, xApiKey, captureRequest) =>
         Future {
           for
             _    <- if (apiKey == xApiKey) Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
             url  <- captureRequest.url
-            jpeg <- jpegCapture.capture(url, captureRequest.elapsedTime)
+            jpeg <-
+              jpegCapture.capture(url, captureRequest.elapsedTime, accurateOpt.getOrElse(true))
           yield jpeg.path.toFile
         }
       )

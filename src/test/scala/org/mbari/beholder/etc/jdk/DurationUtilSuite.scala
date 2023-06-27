@@ -25,10 +25,9 @@ class DurationUtilSuite extends munit.FunSuite:
   val ms = math.round(4.321 * 1000)
   val d = Duration.ofMillis(ms).plusHours(h).plusMinutes(m)
 
-  test("toHMS") {
+  test("toHMS"):
     val hms = DurationUtil.toHMS(d)
     assertEquals(hms, "06:05:04.321")
-  }
 
   test("fromHMS") {
     val t = DurationUtil.fromHMS(DurationUtil.toHMS(d))

@@ -31,7 +31,7 @@ class JpegCacheSuite extends munit.FunSuite:
   /*
     Put an item into a cache and get it back
   */
-  test("put and get") {
+  test("put and get"):
     val cache = JpegCache(root, 3, .3)
     val path = root.resolve(s"${getClass.getSimpleName}_put_get.jpg").toAbsolutePath().normalize()
     val jpeg = Jpeg(videoUrl, Duration.ofMillis(250), path, sizeBytes = Some(1000000))
@@ -52,13 +52,12 @@ class JpegCacheSuite extends munit.FunSuite:
         assertEquals(jpeg2.sizeBytes.get, jpeg1.sizeBytes.get)
         assertEquals(jpeg2.videoUrl, jpeg1.videoUrl)
     cache.clearCache()
-  }
 
   /*
     Put two items in a cache. Remove one and confirm it's removed and that
     the second one is still in the cache
   */
-  test("remove") {
+  test("remove"):
     val cache = JpegCache(root, 3, .3)
     val path = root.resolve(s"${getClass.getSimpleName}_put_get.jpg").toAbsolutePath().normalize()
     val jpeg = Jpeg(videoUrl, Duration.ofMillis(750), path, sizeBytes = Some(1000000))
@@ -70,13 +69,12 @@ class JpegCacheSuite extends munit.FunSuite:
     assertTrue(cache.get(jpeg).isEmpty)
     assertTrue(cache.get(jpeg1).isDefined)
     cache.clearCache()
-  }
 
   /*
 
 
   */
-  test("freeSpace") {
+  test("freeSpace"):
     val cache = JpegCache(root, 3, .3)
     val jpegs = for 
       i   <- 0 until 4
@@ -90,7 +88,6 @@ class JpegCacheSuite extends munit.FunSuite:
     val last = cache.get(jpegs.last)
     assertTrue(last.isDefined)
     cache.clearCache()
-  }
 
   
   

@@ -109,18 +109,18 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
    * @return
    *   The stored jpeg
    */
-  def put(jpeg: Jpeg): Jpeg = synchronized {
-    // By changing the data to now, it's always the last item in the list, so
-    // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
-    val newJpeg = jpeg.copy(created = Instant.now())
-    // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)
-    val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
-    cache.put(jpeg.videoUrl, newList)
-    // -- Cache size is updated and/or freed here
+  def put(jpeg: Jpeg): Jpeg =
+    synchronized:
+      // By changing the data to now, it's always the last item in the list, so
+      // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
+      val newJpeg = jpeg.copy(created = Instant.now())
+      // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)
+      val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
+      cache.put(jpeg.videoUrl, newList)
+      // -- Cache size is updated and/or freed here
 
-    jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
-    jpeg
-  }
+      jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
+      jpeg
 
   /**
    * Store a jpeg in the cache
@@ -145,7 +145,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
    * @param jpeg
    *   the jpeg to remove
    */
-  def remove(jpeg: Jpeg): Option[Jpeg] = synchronized {
+  def remove(jpeg: Jpeg): Option[Jpeg] = synchronized:
     Option(cache.get(jpeg.videoUrl)) match
       case None        => None
       case Some(jpegs) =>
@@ -158,7 +158,6 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
             cacheSizeMB.getAndUpdate(i => i - theJpeg.sizeMB.getOrElse(0d))
             Some(theJpeg)
           case _        => None
-  }
 
   /**
    * Checks the cache size and frees up disk if needed
@@ -170,7 +169,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
 
       val dropSize = currentSizeMB * cacheClearPct
 
-      synchronized {
+      synchronized:
         var jpegs = cache
           .asScala
           .values
@@ -192,7 +191,6 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         jpegs
           .take(numToDrop)
           .foreach(dropJpeg)
-      }
 
   /** helper function tor remove a jpeg from cache and disk */
   private def dropJpeg(jpeg: Jpeg): Unit =
@@ -201,7 +199,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
       Files.delete(jpeg.path)
 
   /** On start we check the disk and load any jpegs already in the cache */
-  private def scanCache(): Unit = synchronized {
+  private def scanCache(): Unit = synchronized:
     cache.clear()
     val visitor = new java.nio.file.SimpleFileVisitor[Path]:
       override def visitFile(
@@ -211,12 +209,11 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         Jpeg.fromPath(root, file).foreach(j => put(j))
         java.nio.file.FileVisitResult.CONTINUE
     Files.walkFileTree(root, visitor)
-  }
 
   /**
    * Removes all jpegs in the cache from disk
    */
-  def clearCache(): Unit = synchronized {
+  def clearCache(): Unit = synchronized:
     cache
       .asScala
       .values
@@ -229,4 +226,3 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
             log.atWarn.log(() => s"Unable to delete ${jpeg.path} from cache root directory")
       )
     cache.clear()
-  }
