@@ -37,6 +37,7 @@ object DurationUtil:
     val parts = hms.split(":")
     val h     = parts(0).toInt
     val m     = parts(1).toInt
+    // TODO should we round or truncate/floor?
     val ms    = math.round(parts(2).toDouble * 1000L)
     Duration
       .ofMillis(ms)

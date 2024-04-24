@@ -59,7 +59,7 @@ object FfmpegUtil:
      */
     val nas  = if !accurate then "-noaccurate_seek" else ""
     val cmd  =
-      s"ffmpeg -ss $time ${nas} -i $videoUrl -frames:v 1 -q:v 1 -hide_banner -loglevel error -y $target"
+      s"ffmpeg -ss $time ${nas} -i $videoUrl -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
     log.atWarn.log(() => s"Executing $cmd")
     Try(cmd.!!) match
       case Success(_) => Right(target)
