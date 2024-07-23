@@ -11,7 +11,7 @@ object Dependencies {
   lazy val logback  = "ch.qos.logback"               % "logback-classic" % "1.5.6"
   lazy val methanol = "com.github.mizosoft.methanol" % "methanol"        % "1.7.0"
   lazy val munit    = "org.scalameta"               %% "munit"           % "1.0.0"
-  lazy val picocli  = "info.picocli"                 % "picocli"         % "4.7.5"
+  lazy val picocli  = "info.picocli"                 % "picocli"         % "4.7.6"
 
   lazy val slf4jVersion = "2.0.13"
   lazy val slf4jApi     = "org.slf4j"      % "slf4j-api"                    % slf4jVersion
