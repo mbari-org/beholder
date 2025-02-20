@@ -87,4 +87,19 @@ class CaptureEndpointsSuite extends munit.FunSuite:
 
     val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
     assertEquals(result.code.code, 200)
+
+  
+  test("/capture?nokey=true"):
+
+    val captureRequest1 = CaptureRequest(videoUrl.toExternalForm(), 2345)
+    
+    val response = basicRequest
+      .post(uri"http://test.com/capture?nokey=true")
+      .header("X-Api-Key", AppConfig.Api.Key)
+      .body(captureRequest1.stringify)
+      .send(backendStub)
+
+    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
+    assertEquals(result.code.code, 200)
+  
   
