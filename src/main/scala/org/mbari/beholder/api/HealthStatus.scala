@@ -33,28 +33,28 @@ final case class HealthStatus(
 
 object HealthStatus:
 
-  /**
-   * @return
-   *   a HealthStatus object with the current JVM stats
-   */
-  def default: HealthStatus =
-    val runtime = Runtime.getRuntime
-    HealthStatus(
-      jdkVersion = Runtime.version.toString,
-      availableProcessors = runtime.availableProcessors,
-      freeMemory = runtime.freeMemory,
-      maxMemory = runtime.maxMemory,
-      totalMemory = runtime.totalMemory
-    )
+    /**
+     * @return
+     *   a HealthStatus object with the current JVM stats
+     */
+    def default: HealthStatus =
+        val runtime = Runtime.getRuntime
+        HealthStatus(
+            jdkVersion = Runtime.version.toString,
+            availableProcessors = runtime.availableProcessors,
+            freeMemory = runtime.freeMemory,
+            maxMemory = runtime.maxMemory,
+            totalMemory = runtime.totalMemory
+        )
 
-  def empty(application: String): HealthStatus =
-    HealthStatus(
-      jdkVersion = "",
-      availableProcessors = 0,
-      freeMemory = 0,
-      maxMemory = 0,
-      totalMemory = 0,
-      application = application,
-      version = "0.0.0",
-      description = ""
-    )
+    def empty(application: String): HealthStatus =
+        HealthStatus(
+            jdkVersion = "",
+            availableProcessors = 0,
+            freeMemory = 0,
+            maxMemory = 0,
+            totalMemory = 0,
+            application = application,
+            version = "0.0.0",
+            description = ""
+        )

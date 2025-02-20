@@ -26,16 +26,16 @@ import org.mbari.beholder.etc.circe.CirceCodecs.given
 
 class HealthEndpoints(using ec: ExecutionContext) extends Endpoints:
 
-  val defaultEndpoint: PublicEndpoint[Unit, ErrorMsg, HealthStatus, Any] =
-    baseEndpoint
-      .get
-      .in("health")
-      .out(jsonBody[HealthStatus])
-      .name("beholderHealth")
-      .description("Get the health status of the server")
-      .tag("health")
-  val defaultImpl: ServerEndpoint[Any, Future]                           =
-    defaultEndpoint.serverLogic(Unit => Future(Right(HealthStatus.default)))
+    val defaultEndpoint: PublicEndpoint[Unit, ErrorMsg, HealthStatus, Any] =
+        baseEndpoint
+            .get
+            .in("health")
+            .out(jsonBody[HealthStatus])
+            .name("beholderHealth")
+            .description("Get the health status of the server")
+            .tag("health")
+    val defaultImpl: ServerEndpoint[Any, Future]                           =
+        defaultEndpoint.serverLogic(Unit => Future(Right(HealthStatus.default)))
 
-  def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(defaultEndpoint)
-  def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(defaultImpl)
+    def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(defaultEndpoint)
+    def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(defaultImpl)

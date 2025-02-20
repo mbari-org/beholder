@@ -21,21 +21,21 @@ import scala.util.Try
 
 object AppConfig:
 
-  val Config = ConfigFactory.load()
+    val Config = ConfigFactory.load()
 
-  val Name: String = "beholder"
+    val Name: String = "beholder"
 
-  val Description: String = "Framegrab server"
+    val Description: String = "Framegrab server"
 
-  val Version: String =
-    Try(getClass.getPackage.getImplementationVersion).getOrElse("0.0.0-SNAPSHOT")
+    val Version: String =
+        Try(getClass.getPackage.getImplementationVersion).getOrElse("0.0.0-SNAPSHOT")
 
-  object Api:
-    val Key: String = Config.getString("beholder.api.key")
+    object Api:
+        val Key: String = Config.getString("beholder.api.key")
 
-  object Http:
-    val Port: Int = Config.getInt("beholder.http.port")
+    object Http:
+        val Port: Int = Config.getInt("beholder.http.port")
 
-  object Cache:
-    val sizeMb: Int     = Config.getInt("beholder.cache.size")
-    val freePct: Double = Config.getDouble("beholder.cache.freepct")
+    object Cache:
+        val sizeMb: Int     = Config.getInt("beholder.cache.size")
+        val freePct: Double = Config.getDouble("beholder.cache.freepct")

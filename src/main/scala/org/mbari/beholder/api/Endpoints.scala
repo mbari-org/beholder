@@ -28,16 +28,16 @@ import org.mbari.beholder.etc.circe.CirceCodecs.given
  * Base class for endpoints in the app
  */
 trait Endpoints:
-  val log = System.getLogger(getClass.getName)
+    val log = System.getLogger(getClass.getName)
 
-  def all: List[Endpoint[?, ?, ?, ?, ?]]
-  def allImpl: List[ServerEndpoint[Any, Future]]
+    def all: List[Endpoint[?, ?, ?, ?, ?]]
+    def allImpl: List[ServerEndpoint[Any, Future]]
 
-  val baseEndpoint = endpoint.errorOut(
-    oneOf[ErrorMsg](
-      oneOfVariant(statusCode(StatusCode.NotFound).and(jsonBody[NotFound])),
-      oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[ServerError])),
-      oneOfVariant(statusCode(StatusCode.Unauthorized).and(jsonBody[Unauthorized])),
-      oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[StatusMsg]))
+    val baseEndpoint = endpoint.errorOut(
+        oneOf[ErrorMsg](
+            oneOfVariant(statusCode(StatusCode.NotFound).and(jsonBody[NotFound])),
+            oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[ServerError])),
+            oneOfVariant(statusCode(StatusCode.Unauthorized).and(jsonBody[Unauthorized])),
+            oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[StatusMsg]))
+        )
     )
-  )

@@ -32,197 +32,192 @@ import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
 
 /**
- * In memory cache of paths to Jpegs that were captured. The cache is organized by videoUrl and
- * elpased time into the video. When the cache on disk size exceeds the allowed size, the oldest
- * jpegs are cleared out of the cache and removed from disk. The number of jpegs removed is
- * specified by the cacheClearPct.
+ * In memory cache of paths to Jpegs that were captured. The cache is organized by videoUrl and elpased time into the
+ * video. When the cache on disk size exceeds the allowed size, the oldest jpegs are cleared out of the cache and
+ * removed from disk. The number of jpegs removed is specified by the cacheClearPct.
  *
- * Jpegs are expected to be stored in jpegs named as follows: <root>/<video url host>/<video url
- * path>/<elapsed time as hh_mm_ss.sss.jpg>
+ * Jpegs are expected to be stored in jpegs named as follows: <root>/<video url host>/<video url path>/<elapsed time as
+ * hh_mm_ss.sss.jpg>
  *
  * @param root
  *   The root directory of the cache
  * @param maxCacheSizeMB
  *   The max allowed on-disk size of the cache
  * @param cacheClearPct
- *   When the maxCacheSizeMB is receached this, disk will be freed equal to maxCacheSizeMb *
- *   cacheClearPct
+ *   When the maxCacheSizeMB is receached this, disk will be freed equal to maxCacheSizeMb * cacheClearPct
  */
 class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20):
 
-  require(Files.isDirectory(root), "root must be a directory")
-  require(Files.isWritable(root), "root must be writable")
-  require(
-    cacheClearPct > 0 && cacheClearPct <= 1,
-    s"cacheClearPct must be between 0 and 1. You used $cacheClearPct"
-  )
+    require(Files.isDirectory(root), "root must be a directory")
+    require(Files.isWritable(root), "root must be writable")
+    require(
+        cacheClearPct > 0 && cacheClearPct <= 1,
+        s"cacheClearPct must be between 0 and 1. You used $cacheClearPct"
+    )
 
-  private val log = System.getLogger(getClass.getName)
+    private val log = System.getLogger(getClass.getName)
 
-  private given jpegOrdering: Ordering[Jpeg] = Ordering.by(_.elapsedTime)
+    private given jpegOrdering: Ordering[Jpeg] = Ordering.by(_.elapsedTime)
 
-  /**
-   * A synchronized map. The URL is the video URL. The list is a sorted (by elapsedTime/elapsed time
-   * into the video) immutable list.
-   */
-  private val cache: ConcurrentHashMap[URL, List[Jpeg]] =
-    new ConcurrentHashMap()
+    /**
+     * A synchronized map. The URL is the video URL. The list is a sorted (by elapsedTime/elapsed time into the video)
+     * immutable list.
+     */
+    private val cache: ConcurrentHashMap[URL, List[Jpeg]] =
+        new ConcurrentHashMap()
 
-  /** Tracks current cache size */
-  private val cacheSizeMB: AtomicReference[Double] = AtomicReference()
+    /** Tracks current cache size */
+    private val cacheSizeMB: AtomicReference[Double] = AtomicReference()
 
-  // -- READ EXISTING FILES INTO CACHE. NEEDED IF SERVER CRASHES TO REBUILT EXISTING CACHE
-  scanCache()
+    // -- READ EXISTING FILES INTO CACHE. NEEDED IF SERVER CRASHES TO REBUILT EXISTING CACHE
+    scanCache()
 
-  def currentCacheSizeMB: Double = cacheSizeMB.get()
+    def currentCacheSizeMB: Double = cacheSizeMB.get()
 
-  /**
-   * @param jpeg
-   *   The jpeg of interest. This only needs valid url and elapsedTime fields
-   * @return
-   *   The jpeg in the cache
-   */
-  def get(jpeg: Jpeg): Option[Jpeg] =
-    Option(cache.get(jpeg.videoUrl)) match
-      case None        => None
-      case Some(jpegs) =>
-        jpegs.search(jpeg)(jpegOrdering) match
-          case Found(i) => Some(jpegs(i))
-          case _        => None
+    /**
+     * @param jpeg
+     *   The jpeg of interest. This only needs valid url and elapsedTime fields
+     * @return
+     *   The jpeg in the cache
+     */
+    def get(jpeg: Jpeg): Option[Jpeg] =
+        Option(cache.get(jpeg.videoUrl)) match
+            case None        => None
+            case Some(jpegs) =>
+                jpegs.search(jpeg)(jpegOrdering) match
+                    case Found(i) => Some(jpegs(i))
+                    case _        => None
 
-  def get(url: URL, elapsedTime: DurationString): Option[Jpeg] =
-    get(url, elapsedTime)
+    def get(url: URL, elapsedTime: DurationString): Option[Jpeg] =
+        get(url, elapsedTime)
 
-  /**
-   * @param url
-   *   The video URL
-   * @param elapsedTime
-   *   The elapsed time into the video
-   */
-  def get(url: URL, elapsedTime: Duration): Option[Jpeg] =
-    get(Jpeg.fake(url, elapsedTime))
+    /**
+     * @param url
+     *   The video URL
+     * @param elapsedTime
+     *   The elapsed time into the video
+     */
+    def get(url: URL, elapsedTime: Duration): Option[Jpeg] =
+        get(Jpeg.fake(url, elapsedTime))
 
-  /**
-   * Store a jpeg in the cache
-   * @param jpeg
-   *   The jpeg to store
-   * @return
-   *   The stored jpeg
-   */
-  def put(jpeg: Jpeg): Jpeg =
-    synchronized:
-      // By changing the data to now, it's always the last item in the list, so
-      // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
-      val newJpeg = jpeg.copy(created = Instant.now())
-      // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)
-      val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
-      cache.put(jpeg.videoUrl, newList)
-      // -- Cache size is updated and/or freed here
-
-      jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
-      jpeg
-
-  /**
-   * Store a jpeg in the cache
-   * @param url
-   *   The video URL
-   * @param elapsedTime
-   *   The elasped time into the video
-   * @param path
-   *   The on disk location of the jpeg. It must be under the cache's root directory
-   */
-  def put(url: URL, elapsedTime: Duration, path: Path): Option[Jpeg] =
-    Jpeg.fromPath(root, path).map(put)
-
-  def put(url: URL, elapsedTime: DurationString, path: Path): Option[Jpeg] =
-    put(url, elapsedTime, path)
-
-  def remove(url: URL, elapsedTime: Duration): Option[Jpeg] =
-    remove(Jpeg.fake(url, elapsedTime))
-
-  /**
-   * Remove a jpeg from the cache.
-   * @param jpeg
-   *   the jpeg to remove
-   */
-  def remove(jpeg: Jpeg): Option[Jpeg] = synchronized:
-    Option(cache.get(jpeg.videoUrl)) match
-      case None        => None
-      case Some(jpegs) =>
-        jpegs.search(jpeg)(jpegOrdering) match
-          case Found(i) =>
-            val theJpeg = jpegs(i)
-            val newList = ListUtil.removeAtIdx(i, jpegs)
+    /**
+     * Store a jpeg in the cache
+     * @param jpeg
+     *   The jpeg to store
+     * @return
+     *   The stored jpeg
+     */
+    def put(jpeg: Jpeg): Jpeg =
+        synchronized:
+            // By changing the data to now, it's always the last item in the list, so
+            // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
+            val newJpeg = jpeg.copy(created = Instant.now())
+            // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)
+            val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
             cache.put(jpeg.videoUrl, newList)
-            // -- The cache size is updated here
-            cacheSizeMB.getAndUpdate(i => i - theJpeg.sizeMB.getOrElse(0d))
-            Some(theJpeg)
-          case _        => None
+            // -- Cache size is updated and/or freed here
 
-  /**
-   * Checks the cache size and frees up disk if needed
-   * @param currentSizeMB
-   *   the current disk size
-   */
-  private def freeDisk(currentSizeMB: Double): Unit =
-    if (currentSizeMB >= maxCacheSizeMB)
+            jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
+            jpeg
 
-      val dropSize = currentSizeMB * cacheClearPct
+    /**
+     * Store a jpeg in the cache
+     * @param url
+     *   The video URL
+     * @param elapsedTime
+     *   The elasped time into the video
+     * @param path
+     *   The on disk location of the jpeg. It must be under the cache's root directory
+     */
+    def put(url: URL, elapsedTime: Duration, path: Path): Option[Jpeg] =
+        Jpeg.fromPath(root, path).map(put)
 
-      synchronized:
-        var jpegs = cache
-          .asScala
-          .values
-          .flatten
-          .toSeq
-          .sortBy(_.created)
+    def put(url: URL, elapsedTime: DurationString, path: Path): Option[Jpeg] =
+        put(url, elapsedTime, path)
 
-        val numToDrop = jpegs
-          .to(LazyList)
-          .map(_.sizeMB.getOrElse(0d))
-          .scanLeft(0d)(_ + _)
-          .takeWhile(s => s < dropSize)
-          .size
+    def remove(url: URL, elapsedTime: Duration): Option[Jpeg] =
+        remove(Jpeg.fake(url, elapsedTime))
 
-        log
-          .atDebug
-          .log(() => s"Freeing $numToDrop jpegs from the cache")
+    /**
+     * Remove a jpeg from the cache.
+     * @param jpeg
+     *   the jpeg to remove
+     */
+    def remove(jpeg: Jpeg): Option[Jpeg] = synchronized:
+        Option(cache.get(jpeg.videoUrl)) match
+            case None        => None
+            case Some(jpegs) =>
+                jpegs.search(jpeg)(jpegOrdering) match
+                    case Found(i) =>
+                        val theJpeg = jpegs(i)
+                        val newList = ListUtil.removeAtIdx(i, jpegs)
+                        cache.put(jpeg.videoUrl, newList)
+                        // -- The cache size is updated here
+                        cacheSizeMB.getAndUpdate(i => i - theJpeg.sizeMB.getOrElse(0d))
+                        Some(theJpeg)
+                    case _        => None
 
-        jpegs
-          .take(numToDrop)
-          .foreach(dropJpeg)
+    /**
+     * Checks the cache size and frees up disk if needed
+     * @param currentSizeMB
+     *   the current disk size
+     */
+    private def freeDisk(currentSizeMB: Double): Unit =
+        if currentSizeMB >= maxCacheSizeMB then
 
-  /** helper function tor remove a jpeg from cache and disk */
-  private def dropJpeg(jpeg: Jpeg): Unit =
-    remove(jpeg.videoUrl, jpeg elapsedTime)
-    if (Files.exists(jpeg.path))
-      Files.delete(jpeg.path)
+            val dropSize = currentSizeMB * cacheClearPct
 
-  /** On start we check the disk and load any jpegs already in the cache */
-  private def scanCache(): Unit = synchronized:
-    cache.clear()
-    val visitor = new java.nio.file.SimpleFileVisitor[Path]:
-      override def visitFile(
-          file: Path,
-          attrs: java.nio.file.attribute.BasicFileAttributes
-      ): java.nio.file.FileVisitResult =
-        Jpeg.fromPath(root, file).foreach(j => put(j))
-        java.nio.file.FileVisitResult.CONTINUE
-    Files.walkFileTree(root, visitor)
+            synchronized:
+                var jpegs = cache
+                    .asScala
+                    .values
+                    .flatten
+                    .toSeq
+                    .sortBy(_.created)
 
-  /**
-   * Removes all jpegs in the cache from disk
-   */
-  def clearCache(): Unit = synchronized:
-    cache
-      .asScala
-      .values
-      .flatten
-      .foreach(jpeg =>
-        if (Files.exists(jpeg.path))
-          if (Files.isWritable(jpeg.path))
-            Files.delete(jpeg.path)
-          else
-            log.atWarn.log(() => s"Unable to delete ${jpeg.path} from cache root directory")
-      )
-    cache.clear()
+                val numToDrop = jpegs
+                    .to(LazyList)
+                    .map(_.sizeMB.getOrElse(0d))
+                    .scanLeft(0d)(_ + _)
+                    .takeWhile(s => s < dropSize)
+                    .size
+
+                log
+                    .atDebug
+                    .log(() => s"Freeing $numToDrop jpegs from the cache")
+
+                jpegs
+                    .take(numToDrop)
+                    .foreach(dropJpeg)
+
+    /** helper function tor remove a jpeg from cache and disk */
+    private def dropJpeg(jpeg: Jpeg): Unit =
+        remove(jpeg.videoUrl, jpeg elapsedTime)
+        if Files.exists(jpeg.path) then Files.delete(jpeg.path)
+
+    /** On start we check the disk and load any jpegs already in the cache */
+    private def scanCache(): Unit = synchronized:
+        cache.clear()
+        val visitor = new java.nio.file.SimpleFileVisitor[Path]:
+            override def visitFile(
+                file: Path,
+                attrs: java.nio.file.attribute.BasicFileAttributes
+            ): java.nio.file.FileVisitResult =
+                Jpeg.fromPath(root, file).foreach(j => put(j))
+                java.nio.file.FileVisitResult.CONTINUE
+        Files.walkFileTree(root, visitor)
+
+    /**
+     * Removes all jpegs in the cache from disk
+     */
+    def clearCache(): Unit = synchronized:
+        cache
+            .asScala
+            .values
+            .flatten
+            .foreach(jpeg =>
+                if Files.exists(jpeg.path) then
+                    if Files.isWritable(jpeg.path) then Files.delete(jpeg.path)
+                    else log.atWarn.log(() => s"Unable to delete ${jpeg.path} from cache root directory")
+            )
+        cache.clear()

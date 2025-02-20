@@ -26,7 +26,7 @@ import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
 import org.mbari.beholder.api.HealthEndpoints
 import org.mbari.beholder.etc.jdk.Logging.given
 import picocli.CommandLine
-import picocli.CommandLine.{Command, Option => Opt, Parameters}
+import picocli.CommandLine.{Command, Option as Opt, Parameters}
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
@@ -35,97 +35,97 @@ import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
 
 @Command(
-  description = Array("Start the server"),
-  name = "main",
-  mixinStandardHelpOptions = true,
-  version = Array("0.0.1")
+    description = Array("Start the server"),
+    name = "main",
+    mixinStandardHelpOptions = true,
+    version = Array("0.0.1")
 )
 class MainRunner extends Callable[Int]:
 
-  @Opt(
-    names = Array("-p", "--port"),
-    description = Array("The port of the server. default: ${DEFAULT-VALUE}")
-  )
-  private var port: Int = AppConfig.Http.Port
+    @Opt(
+        names = Array("-p", "--port"),
+        description = Array("The port of the server. default: ${DEFAULT-VALUE}")
+    )
+    private var port: Int = AppConfig.Http.Port
 
-  @Opt(
-    names = Array("-c", "--cachesize"),
-    description = Array("The maximum allowed size in MB of the image cache")
-  )
-  private var cacheSizeMB = AppConfig.Cache.sizeMb
+    @Opt(
+        names = Array("-c", "--cachesize"),
+        description = Array("The maximum allowed size in MB of the image cache")
+    )
+    private var cacheSizeMB = AppConfig.Cache.sizeMb
 
-  @Opt(
-    names = Array("-f", "--freepct"),
-    description = Array("The percent of max cache to free when it's full. value between 0 and 1")
-  )
-  private var freePct = AppConfig.Cache.freePct
+    @Opt(
+        names = Array("-f", "--freepct"),
+        description = Array("The percent of max cache to free when it's full. value between 0 and 1")
+    )
+    private var freePct = AppConfig.Cache.freePct
 
-  @Opt(
-    names = Array("-k", "--apikey"),
-    description = Array("API Key")
-  )
-  private var apiKey = AppConfig.Api.Key
+    @Opt(
+        names = Array("-k", "--apikey"),
+        description = Array("API Key")
+    )
+    private var apiKey = AppConfig.Api.Key
 
-  @Parameters(
-    paramLabel = "<rootDirectory>",
-    description = Array("The location of the image cache")
-  )
-  private var cacheRoot: Path = _
+    @Parameters(
+        paramLabel = "<rootDirectory>",
+        description = Array("The location of the image cache")
+    )
+    private var cacheRoot: Path = _
 
-  override def call(): Int =
-    Main.run(port, cacheRoot, cacheSizeMB, freePct, apiKey)
-    0
+    override def call(): Int =
+        Main.run(port, cacheRoot, cacheSizeMB, freePct, apiKey)
+        0
 
 object Main:
 
-  private val log = System.getLogger(getClass.getName())
+    private val log = System.getLogger(getClass.getName())
 
-  def main(args: Array[String]): Unit =
-    val s = """
+    def main(args: Array[String]): Unit =
+        val s = """
       | :::====  :::===== :::  === :::====  :::      :::====  :::===== :::==== 
       | :::  === :::      :::  === :::  === :::      :::  === :::      :::  ===
       | =======  ======   ======== ===  === ===      ===  === ======   ======= 
       | ===  === ===      ===  === ===  === ===      ===  === ===      === === 
       | =======  ======== ===  ===  ======  ======== =======  ======== ===  ===""".stripMargin
-    println(s)
-    new CommandLine(new MainRunner()).execute(args: _*)
+        println(s)
+        new CommandLine(new MainRunner()).execute(args*)
 
-  def run(
-      port: Int,
-      cacheRoot: Path,
-      cacheSizeMb: Int = AppConfig.Cache.sizeMb,
-      freePct: Double = AppConfig.Cache.freePct,
-      apiKey: String = AppConfig.Api.Key
-  ): Unit =
-    log.atInfo.log(s"Starting up ${AppConfig.Name} v${AppConfig.Version} on port $port")
+    def run(
+        port: Int,
+        cacheRoot: Path,
+        cacheSizeMb: Int = AppConfig.Cache.sizeMb,
+        freePct: Double = AppConfig.Cache.freePct,
+        apiKey: String = AppConfig.Api.Key
+    ): Unit =
+        log.atInfo.log(s"Starting up ${AppConfig.Name} v${AppConfig.Version} on port $port")
 
-    given executionContext: ExecutionContextExecutor = ExecutionContext.global
+        given executionContext: ExecutionContextExecutor = ExecutionContext.global
 
-    // -- Vert.x server
-    val vertx  = Vertx.vertx()
-    val server = vertx.createHttpServer()
-    val router = Router.router(vertx)
+        // -- Vert.x server
+        val vertx  = Vertx.vertx()
+        val server = vertx.createHttpServer()
+        val router = Router.router(vertx)
 
-    // Add CORS
-    val corsHandler = CorsHandler.create("*")
-    router.route().handler(corsHandler)
+        // Add CORS
+        val corsHandler = CorsHandler.create("*")
+        router.route().handler(corsHandler)
 
-    // create cache if needed
-    if (!Files.exists(cacheRoot))
-      log.atInfo.log(() => s"Creating cache directory: $cacheRoot")
-      Files.createDirectories(cacheRoot)
+        // create cache if needed
+        if !Files.exists(cacheRoot) then
+            log.atInfo.log(() => s"Creating cache directory: $cacheRoot")
+            Files.createDirectories(cacheRoot)
 
-    val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
-    val jpegCapture      = JpegCapture(jpegCache)
-    val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
-    val healthEndpoints  = HealthEndpoints()
-    val swaggerEndpoints = SwaggerEndpoints(captureEndpoints, healthEndpoints)
-    val allEndpointImpls =
-      captureEndpoints.allImpl ++ healthEndpoints.allImpl ++ swaggerEndpoints.allImpl
+        val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
+        val jpegCapture      = JpegCapture(jpegCache)
+        val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
+        val healthEndpoints  = HealthEndpoints()
+        val swaggerEndpoints = SwaggerEndpoints(captureEndpoints, healthEndpoints)
+        val allEndpointImpls =
+            captureEndpoints.allImpl ++ healthEndpoints.allImpl ++ swaggerEndpoints.allImpl
 
-    // Add Tapir endpoints
-    for endpoint <- allEndpointImpls do
-      val attach = VertxFutureServerInterpreter().route(endpoint)
-      attach(router)
+        // Add Tapir endpoints
+        for endpoint <- allEndpointImpls do
+            val attach = VertxFutureServerInterpreter().route(endpoint)
+            attach(router)
 
-    Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)
+        Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)

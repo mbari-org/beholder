@@ -17,8 +17,8 @@
 package org.mbari.beholder.api
 
 sealed trait ErrorMsg:
-  def message: String
-  def responseCode: Int
+    def message: String
+    def responseCode: Int
 
 /**
  * Just a simple class used to return a JSON error response

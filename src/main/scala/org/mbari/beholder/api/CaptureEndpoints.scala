@@ -27,46 +27,49 @@ import org.mbari.beholder.JpegCapture
 import java.net.URL
 import java.nio.file.Files
 
-class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: ExecutionContext)
-    extends Endpoints:
+class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: ExecutionContext) extends Endpoints:
 
-  val captureEndpoint =
-    baseEndpoint
-      .post
-      .in("capture")
-      .in(
-        query[Option[Boolean]]("accurate").description(
-          "If true, capture at the exact time. (default: true). Otherwise seek to nearest keyframe before the elapsed time"
-        )
-      )
-      .in(
-        query[Option[Boolean]]("nokey").description(
-          "If true, skip non-key frames after the seek point. Useful for fast processing, but potentially less accurate"
-        )
-      )
-      .in(header[String]("X-Api-Key").description("Required key for access"))
-      .in(jsonBody[CaptureRequest])
-      .out(fileBody and header("Content-Type", "image/jpeg"))
-      .name("capture")
-      .description(
-        "Capture a frame from a video at a given elapsed time or pull if from the cache if it exists"
-      )
-      .summary("Frame capture from a video")
-      .tag("capture")
+    val captureEndpoint =
+        baseEndpoint
+            .post
+            .in("capture")
+            .in(
+                query[Option[Boolean]]("accurate").description(
+                    "If true, capture at the exact time. (default: true). Otherwise seek to nearest keyframe before the elapsed time"
+                )
+            )
+            .in(
+                query[Option[Boolean]]("nokey").description(
+                    "If true, skip non-key frames after the seek point. (default: false). Useful for fast processing, but potentially less accurate"
+                )
+            )
+            .in(header[String]("X-Api-Key").description("Required key for access"))
+            .in(jsonBody[CaptureRequest])
+            .out(fileBody and header("Content-Type", "image/jpeg"))
+            .name("capture")
+            .description(
+                "Capture a frame from a video at a given elapsed time or pull if from the cache if it exists"
+            )
+            .summary("Frame capture from a video")
+            .tag("capture")
 
-  val captureImpl: ServerEndpoint[Any, Future] =
-    captureEndpoint
-      .serverLogic((accurateOpt, nokeyOpt, xApiKey, captureRequest) =>
-        Future {
-          for
-            _    <- if (apiKey == xApiKey) Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
-            url  <- captureRequest.url
-            jpeg <-
-              jpegCapture.capture(url, captureRequest.elapsedTime, accurateOpt.getOrElse(true), 
-                                  nokeyOpt.getOrElse(false))
-          yield jpeg.path.toFile
-        }
-      )
+    val captureImpl: ServerEndpoint[Any, Future] =
+        captureEndpoint
+            .serverLogic((accurateOpt, nokeyOpt, xApiKey, captureRequest) =>
+                Future {
+                    for
+                        _    <- if apiKey == xApiKey then Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
+                        url  <- captureRequest.url
+                        jpeg <-
+                            jpegCapture.capture(
+                                url,
+                                captureRequest.elapsedTime,
+                                accurateOpt.getOrElse(true),
+                                nokeyOpt.getOrElse(false)
+                            )
+                    yield jpeg.path.toFile
+                }
+            )
 
-  def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(captureEndpoint)
-  def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(captureImpl)
+    def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(captureEndpoint)
+    def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(captureImpl)

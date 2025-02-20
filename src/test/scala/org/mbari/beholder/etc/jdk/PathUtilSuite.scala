@@ -19,6 +19,7 @@ package org.mbari.beholder.etc.jdk
 import java.nio.file.Paths
 import org.junit.Assert.*
 import java.net.URL
+import java.net.URI
 
 class PathUtilSuite extends munit.FunSuite:
 
@@ -42,7 +43,7 @@ class PathUtilSuite extends munit.FunSuite:
 
   test("toPath"):
     val root = Paths.get("/Users/brian")
-    val url =  URL("http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4")
+    val url =  URI.create("http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4").toURL()
     val actual = PathUtil.toPath(root, url)
     val expected = Paths.get("/Users/brian/m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4")
     assertEquals(actual, expected)
@@ -53,6 +54,6 @@ class PathUtilSuite extends munit.FunSuite:
     val path = Paths.get("/Users/brian/m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4")
     val actual = PathUtil.fromPath(root, path)
     assertTrue(actual.isDefined)
-    val expected = URL("http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4")
+    val expected = URI.create("http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4").toURL()
     assertEquals(actual.get, expected)
   
