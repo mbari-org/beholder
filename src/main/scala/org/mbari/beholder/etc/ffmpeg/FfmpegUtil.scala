@@ -46,7 +46,8 @@ object FfmpegUtil:
       videoUrl: URL,
       elapsedTime: Duration,
       target: Path,
-      accurate: Boolean = true
+      accurate: Boolean = true,
+      skipNonKeyFrames: Boolean = false
   ): Either[Throwable, Path] =
     val time = DurationUtil.toHMS(elapsedTime)
     /*
@@ -58,9 +59,44 @@ object FfmpegUtil:
      -loglevel error  Make quieter
      */
     val nas  = if !accurate then "-noaccurate_seek" else ""
+    val snk  = if skipNonKeyFrames then "-skip_frame nokey" else ""
     val cmd  =
-      s"ffmpeg -ss $time ${nas} -i $videoUrl -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
-    log.atWarn.log(() => s"Executing $cmd")
+      s"ffmpeg -ss $time ${snk} ${nas} -i $videoUrl -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
+    log.atDebug.log(() => s"Executing $cmd")
     Try(cmd.!!) match
       case Success(_) => Right(target)
       case Failure(e) => Left(e)
+
+      /* 
+      Argument Breakdown:
+ffmpeg The command-line tool for processing video and audio files.
+
+-ss "00:12:18.521" - Seeks to the timestamp 12 minutes, 18.521 seconds before 
+starting processing. When used before -i, it seeks quickly (keyframe-based) 
+rather than frame-accurate.
+
+-noaccurate_seek - Prevents precise (slow) seeking. Instead, seeking happens 
+at the nearest keyframe, making it faster but potentially less accurate.
+
+-skip_frame nokey - Skips non-keyframes, meaning only keyframes will be 
+considered. Useful for fast processing when exact frame accuracy is not required.
+
+-i "http://m3.shore.mbari.org/...V4430_20220908T155336Z_h264.mp4" -
+Specifies the input video file. In this case, it is a remote .mp4 video file.
+
+-frames:v 1 - Extracts exactly one video frame.
+
+-qmin 1 - Sets the minimum quality factor for JPEG encoding (1 is the highest quality).
+
+-q:v 1 - Sets the output image quality for the extracted frame. Lower values 
+mean better quality (1 is best for JPEG).
+
+-hide_banner - Suppresses extra information about the FFmpeg version.
+
+-loglevel error - Only displays errors in the output (hides warnings and other messages).
+
+-y - Automatically overwrites the output file if it already exists.
+
+The output filename for the extracted frame.
+      
+       */

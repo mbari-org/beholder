@@ -34,23 +34,25 @@ class JpegCapture(cache: JpegCache):
   def capture(
       videoUrl: URL,
       elapsedTime: Duration,
-      accurate: Boolean = true
+      accurate: Boolean = true,
+      skipNonKeyFrames: Boolean = false
   ): Either[ErrorMsg, Jpeg] =
     cache.get(videoUrl, elapsedTime) match
       case Some(jpeg) => Right(jpeg)
-      case None       => grabFrame(videoUrl, elapsedTime, accurate)
+      case None       => grabFrame(videoUrl, elapsedTime, accurate, skipNonKeyFrames)
 
   private def grabFrame(
       videoUrl: URL,
       elapsedTime: Duration,
-      accurate: Boolean
+      accurate: Boolean,
+      skipNonKeyFrames: Boolean
   ): Either[ErrorMsg, Jpeg] =
     val jpeg = Jpeg.toPath(cache.root, videoUrl, elapsedTime)
     if (PathUtil.isChild(cache.root, jpeg.path))
       val parent = jpeg.path.getParent()
       if (!Files.exists(parent))
         Files.createDirectories(parent)
-      FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path, accurate) match
+      FfmpegUtil.frameCapture(videoUrl, elapsedTime, jpeg.path, accurate, skipNonKeyFrames) match
         case Left(e)     =>
           log
             .withCause(e)

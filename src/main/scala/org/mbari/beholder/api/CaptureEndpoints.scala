@@ -36,7 +36,12 @@ class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: Execu
       .in("capture")
       .in(
         query[Option[Boolean]]("accurate").description(
-          "If true, capture at the exact time. (default: true)"
+          "If true, capture at the exact time. (default: true). Otherwise seek to nearest keyframe before the elapsed time"
+        )
+      )
+      .in(
+        query[Option[Boolean]]("nokey").description(
+          "If true, skip non-key frames after the seek point. Useful for fast processing, but potentially less accurate"
         )
       )
       .in(header[String]("X-Api-Key").description("Required key for access"))
@@ -51,13 +56,14 @@ class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: Execu
 
   val captureImpl: ServerEndpoint[Any, Future] =
     captureEndpoint
-      .serverLogic((accurateOpt, xApiKey, captureRequest) =>
+      .serverLogic((accurateOpt, nokeyOpt, xApiKey, captureRequest) =>
         Future {
           for
             _    <- if (apiKey == xApiKey) Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
             url  <- captureRequest.url
             jpeg <-
-              jpegCapture.capture(url, captureRequest.elapsedTime, accurateOpt.getOrElse(true))
+              jpegCapture.capture(url, captureRequest.elapsedTime, accurateOpt.getOrElse(true), 
+                                  nokeyOpt.getOrElse(false))
           yield jpeg.path.toFile
         }
       )
