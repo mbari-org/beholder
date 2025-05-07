@@ -33,6 +33,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
+import io.vertx.core.http.HttpServerOptions
 
 @Command(
     description = Array("Start the server"),
@@ -103,8 +104,10 @@ object Main:
 
         // -- Vert.x server
         val vertx  = Vertx.vertx()
-        val server = vertx.createHttpServer()
+        val httpServerOptions = new HttpServerOptions().setCompressionSupported(true)
+        val server = vertx.createHttpServer(httpServerOptions)
         val router = Router.router(vertx)
+        val interpreter = VertxFutureServerInterpreter()
 
         // Add CORS
         val corsHandler = CorsHandler.create("*")
@@ -125,7 +128,7 @@ object Main:
 
         // Add Tapir endpoints
         for endpoint <- allEndpointImpls do
-            val attach = VertxFutureServerInterpreter().route(endpoint)
+            val attach = interpreter.blockingRoute(endpoint)
             attach(router)
 
         Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)
