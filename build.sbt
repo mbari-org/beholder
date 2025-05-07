@@ -13,7 +13,7 @@ Docker / packageName          := "mbari/beholder"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 // Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
 
-ThisBuild / scalaVersion     := "3.6.3"
+ThisBuild / scalaVersion     := "3.6.4"
 ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
@@ -42,7 +42,7 @@ lazy val root = project
     LaikaPlugin)
   .settings(
     name := "beholder",
-    dockerBaseImage    := "eclipse-temurin:17",
+    dockerBaseImage    := "eclipse-temurin:24",
     dockerCommands := buildDocker(dockerCommands.value),
     dockerEntrypoint := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
     dockerExposedPorts := Seq(8080),
