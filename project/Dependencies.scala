@@ -2,6 +2,9 @@ import sbt._
 
 object Dependencies {
 
+  lazy val auth0 = "com.auth0" % "java-jwt" % "4.5.0"
+  lazy val auth0jwk =  "com.auth0" % "jwks-rsa" % "0.22.1"
+
   private val circeVersion = "0.14.13"
   lazy val circeCore       = "io.circe" %% "circe-core"    % circeVersion
   lazy val circeGeneric    = "io.circe" %% "circe-generic" % circeVersion
@@ -28,6 +31,6 @@ object Dependencies {
   lazy val tapirVertx       = "com.softwaremill.sttp.tapir" %% "tapir-vertx-server" % tapirVersion
 
   lazy val typesafeConfig = "com.typesafe"   % "config"          % "1.4.3"
-  lazy val zio            = "dev.zio"       %% "zio"             % "2.1.17"
+  lazy val zio            = "dev.zio"       %% "zio"             % "2.1.19"
   
 }
