@@ -1,0 +1,175 @@
+/*
+ * Copyright 2022 MBARI
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.mbari.beholder.auth
+
+import com.auth0.jwk.{JwkProvider, JwkProviderBuilder, UrlJwkProvider}
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import com.auth0.jwt.exceptions.{JWTVerificationException, TokenExpiredException}
+import com.auth0.jwt.interfaces.DecodedJWT
+import org.mbari.beholder.AppConfig
+import sttp.model.StatusCode
+import sttp.tapir.EndpointOutput
+import sttp.tapir.auth.{BearerAuthenticator, SttpAuth, bearer}
+
+import java.net.URL
+import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
+
+/**
+ * OAuth authenticator for validating JWT tokens
+ */
+object OAuthAuthenticator:
+  val log = System.getLogger(getClass.getName)
+  
+  /**
+   * Creates an authenticator for validating Bearer tokens using an OAuth provider
+   * 
+   * @param jwksUrl The URL to the JSON Web Key Set for validating tokens
+   * @param audience The audience claim that should be present in valid tokens
+   * @param issuer The issuer claim that should be present in valid tokens
+   * @param requiredScope The scope that is required for the API access
+   * @param ec The execution context
+   * @return A bearer token authenticator
+   */
+  def create(
+    jwksUrl: String,
+    audience: String,
+    issuer: String,
+    requiredScope: String
+  )(using ec: ExecutionContext): BearerAuthenticator[Future, Either[StatusCode, Unit]] =
+    // Create a JWK provider to load the public keys
+    val jwkProvider = new JwkProviderBuilder(jwksUrl)
+      .cached(true)
+      .build()
+    
+    // Create the authenticator
+    val authenticator: BearerAuthenticator[Future, Either[StatusCode, Unit]] = 
+      token => Future {
+        if token == null || token.isEmpty then
+          Left(StatusCode.Unauthorized)
+        else
+          validateToken(token, jwkProvider, audience, issuer, requiredScope) match
+            case Success(_) => Right(())
+            case Failure(e) => 
+              log.atWarning.log(() => s"Auth failed: ${e.getMessage}")
+              Left(StatusCode.Unauthorized)
+      }
+    
+    authenticator
+  
+  /**
+   * Validates a JWT token
+   * 
+   * @param token The JWT token to validate
+   * @param jwkProvider The JSON Web Key provider
+   * @param audience The expected audience claim
+   * @param issuer The expected issuer claim
+   * @param requiredScope The required scope
+   * @return Success or Failure with the exception
+   */
+  private def validateToken(
+    token: String, 
+    jwkProvider: JwkProvider,
+    audience: String,
+    issuer: String,
+    requiredScope: String
+  ): Try[Unit] = Try {
+    // Decode the token to get the key ID
+    val decodedJWT = JWT.decode(token)
+    val kid = decodedJWT.getKeyId
+    
+    // Get the public key from the JWK
+    val jwk = jwkProvider.get(kid)
+    val publicKey = jwk.getPublicKey.asInstanceOf[RSAPublicKey]
+    
+    // Create an algorithm using the public key
+    val algorithm = Algorithm.RSA256(publicKey, null.asInstanceOf[RSAPrivateKey])
+    
+    // Verify the token
+    val verifier = JWT.require(algorithm)
+      .withAudience(audience)
+      .withIssuer(issuer)
+      .build()
+    
+    val verified = verifier.verify(token)
+    
+    // Check if the token has the required scope
+    if !hasRequiredScope(verified, requiredScope) then
+      throw new JWTVerificationException(s"Token is missing required scope: $requiredScope")
+  }
+  
+  /**
+   * Checks if the token has the required scope
+   * 
+   * @param jwt The decoded JWT
+   * @param requiredScope The required scope
+   * @return true if the token contains the required scope
+   */
+  private def hasRequiredScope(jwt: DecodedJWT, requiredScope: String): Boolean =
+    Option(jwt.getClaim("scope").asString())
+      .exists(scope => scope.split(" ").contains(requiredScope))
+
+/**
+ * Utility class for working with OAuth authentication
+ */
+object OAuthAuth:
+  /**
+   * Creates an OAuth authentication for securing endpoints
+   * 
+   * @param ec The execution context
+   * @return Authentication for endpoints
+   */
+  def oauth(using ec: ExecutionContext): SttpAuth[Future, Unit, Option[String], Either[StatusCode, Unit]] =
+    val authenticator = if AppConfig.OAuth.Enabled then
+      OAuthAuthenticator.create(
+        AppConfig.OAuth.JwksUrl,
+        AppConfig.OAuth.Audience,
+        AppConfig.OAuth.Issuer,
+        AppConfig.OAuth.Scope
+      )
+    else
+      // Fallback to always fail
+      _: String => Future.successful(Left(StatusCode.Unauthorized))
+      
+    bearer[Future, Option[String], Either[StatusCode, Unit]](authenticator)
+
+  /**
+   * Creates a fallback authenticator that can use either API key or OAuth
+   * 
+   * @param apiKey The API key to match
+   * @param ec The execution context
+   * @return A function that authenticates using either method
+   */
+  def fallbackAuth(apiKey: String)(using ec: ExecutionContext): String => Future[Either[StatusCode, Unit]] =
+    (authHeader: String) => 
+      if AppConfig.OAuth.Enabled && authHeader.startsWith("Bearer ") then
+        // Remove the "Bearer " prefix
+        val token = authHeader.substring(7)
+        OAuthAuthenticator.create(
+          AppConfig.OAuth.JwksUrl,
+          AppConfig.OAuth.Audience,
+          AppConfig.OAuth.Issuer,
+          AppConfig.OAuth.Scope
+        )(token)
+      else if authHeader == apiKey then
+        // API key auth
+        Future.successful(Right(()))
+      else
+        // Auth failed
+        Future.successful(Left(StatusCode.Unauthorized))
