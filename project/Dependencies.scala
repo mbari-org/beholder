@@ -3,9 +3,9 @@ import sbt._
 object Dependencies {
 
   lazy val auth0 = "com.auth0" % "java-jwt" % "4.5.0"
-  lazy val auth0jwk =  "com.auth0" % "jwks-rsa" % "0.22.1"
+  lazy val auth0jwk =  "com.auth0" % "jwks-rsa" % "0.22.2"
 
-  private val circeVersion = "0.14.13"
+  private val circeVersion = "0.14.14"
   lazy val circeCore       = "io.circe" %% "circe-core"    % circeVersion
   lazy val circeGeneric    = "io.circe" %% "circe-generic" % circeVersion
   lazy val circeParser     = "io.circe" %% "circe-parser"  % circeVersion
@@ -23,7 +23,7 @@ object Dependencies {
 
   lazy val sttpCirceClient = "com.softwaremill.sttp.client3" %% "circe" % "3.11.0"
 
-  private val tapirVersion  = "1.11.25"
+  private val tapirVersion  = "1.11.34"
   lazy val tapirStubServer  = "com.softwaremill.sttp.tapir" %% "tapir-sttp-stub-server" % tapirVersion
   lazy val tapirSwagger     = "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirVersion
   lazy val tapirCirce       = "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion
