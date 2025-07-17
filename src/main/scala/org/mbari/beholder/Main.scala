@@ -103,11 +103,11 @@ object Main:
         given executionContext: ExecutionContextExecutor = ExecutionContext.global
 
         // -- Vert.x server
-        val vertx  = Vertx.vertx()
+        val vertx             = Vertx.vertx()
         val httpServerOptions = new HttpServerOptions().setCompressionSupported(true)
-        val server = vertx.createHttpServer(httpServerOptions)
-        val router = Router.router(vertx)
-        val interpreter = VertxFutureServerInterpreter()
+        val server            = vertx.createHttpServer(httpServerOptions)
+        val router            = Router.router(vertx)
+        val interpreter       = VertxFutureServerInterpreter()
 
         // Add CORS
         val corsHandler = CorsHandler.create("*")
