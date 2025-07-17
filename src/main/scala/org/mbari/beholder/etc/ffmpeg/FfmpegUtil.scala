@@ -62,9 +62,7 @@ object FfmpegUtil:
         val cmd  =
             s"ffmpeg -ss $time ${snk} ${nas} -i $videoUrl -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
         log.atDebug.log(() => s"Executing $cmd")
-        Try(cmd.!!) match
-            case Success(_) => Right(target)
-            case Failure(e) => Left(e)
+        Try(cmd.!!).map(_ => target).toEither
 
             /*
       Argument Breakdown:

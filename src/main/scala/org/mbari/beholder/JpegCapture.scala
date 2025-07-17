@@ -26,6 +26,9 @@ import org.mbari.beholder.etc.jdk.PathUtil
 import org.mbari.beholder.api.ErrorMsg
 import org.mbari.beholder.api.StatusMsg
 import org.mbari.beholder.api.ServerError
+import scala.util.Try
+import scala.util.Failure
+import scala.util.Success
 
 class JpegCapture(cache: JpegCache):
 
@@ -59,8 +62,19 @@ class JpegCapture(cache: JpegCache):
                         .log(() => s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUrl")
                     Left(StatusMsg(s"Failed to capture frame from $videoUrl at $elapsedTime", 500))
                 case Right(path) =>
-                    val sizeBytes = Files.size(path)
-                    val theJpeg   = jpeg.copy(path = path, sizeBytes = Some(sizeBytes))
-                    cache.put(theJpeg)
-                    Right(theJpeg)
+                    Try:
+                        val sizeBytes = Files.size(path)
+                        val theJpeg   = jpeg.copy(path = path, sizeBytes = Some(sizeBytes))
+                        cache.put(theJpeg)
+                        log.atDebug.log(() => s"Captured image at ${DurationUtil.toHMS(elapsedTime)} from $videoUrl")
+                        theJpeg
+                    match
+                        case Failure(exception) => 
+                            log
+                                .withCause(exception)
+                                .atError
+                                .log(() => s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUrl")
+                            Left(StatusMsg(s"Failed to capture frame from $videoUrl at $elapsedTime", 500))
+                        case Success(value) => Right(value)
+                    
         else Left(ServerError("An invalid cache path was calculated"))
