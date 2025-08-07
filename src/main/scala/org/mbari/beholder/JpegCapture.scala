@@ -34,6 +34,16 @@ class JpegCapture(cache: JpegCache):
 
     private val log = System.getLogger(getClass.getName)
 
+    /**
+      * Capture a frame from the video at the specified elapsed time. If the frame is 
+      * not already in the cache, it will be captured using ffmpeg and stored in the cache.
+      *
+      * @param videoUrl The URL of the video to capture from
+      * @param elapsedTime The elapsed time into the video to capture the frame
+      * @param accurate If true, the frame will be captured at the exact elapsed time. If false, the frame will be captured at the nearest keyframe.
+      * @param skipNonKeyFrames If true, the capture will skip non-key frames. This is useful for videos that do not have keyframes at regular intervals.
+      * @return On success, a Right containing the information and location on disk of the captured Jpeg. On failure, a Left containing an ErrorMsg.
+      */
     def capture(
         videoUrl: URL,
         elapsedTime: Duration,

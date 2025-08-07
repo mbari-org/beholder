@@ -30,6 +30,7 @@ import scala.collection.Searching.Found
 import scala.concurrent.duration.Duration.apply
 import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
+import org.mbari.beholder.util.VectorUtil
 
 /**
  * In memory cache of paths to Jpegs that were captured. The cache is organized by videoUrl and elpased time into the
@@ -63,7 +64,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
      * A synchronized map. The URL is the video URL. The list is a sorted (by elapsedTime/elapsed time into the video)
      * immutable list.
      */
-    private val cache: ConcurrentHashMap[URL, List[Jpeg]] =
+    private val cache: ConcurrentHashMap[URL, Vector[Jpeg]] =
         new ConcurrentHashMap()
 
     /** Tracks current cache size */
@@ -84,12 +85,14 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         Option(cache.get(jpeg.videoUrl)) match
             case None        => None
             case Some(jpegs) =>
-                jpegs.search(jpeg)(jpegOrdering) match
+                jpegs.search(jpeg)(using jpegOrdering) match
                     case Found(i) => Some(jpegs(i))
                     case _        => None
 
     def get(url: URL, elapsedTime: DurationString): Option[Jpeg] =
-        get(url, elapsedTime)
+        DurationString.unapply(elapsedTime) match
+            case None        => None
+            case Some(dur)  => get(url, dur)
 
     /**
      * @param url
@@ -109,14 +112,18 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
      */
     def put(jpeg: Jpeg): Jpeg =
         synchronized:
-            // By changing the data to now, it's always the last item in the list, so
+            // By changing the date to now, it's always the last item in the list, so
             // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
             val newJpeg = jpeg.copy(created = Instant.now())
             // val newList = (jpeg :: cache.getOrDefault(jpeg.videoUrl, Nil)).sortBy(_.elapsedTime)
-            val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
-            cache.put(jpeg.videoUrl, newList)
-            // -- Cache size is updated and/or freed here
+            // val newList = cache.getOrDefault(jpeg.videoUrl, Nil) :+ newJpeg
+            // cache.put(jpeg.videoUrl, newList)
 
+            cache.compute(
+                jpeg.videoUrl, 
+                (_, oldList) => (Option(oldList).getOrElse(Vector.empty) :+ newJpeg)
+            )
+            // -- Cache size is updated and/or freed here
             jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
             jpeg
 
@@ -133,7 +140,9 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         Jpeg.fromPath(root, path).map(put)
 
     def put(url: URL, elapsedTime: DurationString, path: Path): Option[Jpeg] =
-        put(url, elapsedTime, path)
+        DurationString.unapply(elapsedTime) match
+            case None        => None
+            case Some(dur)  => put(url, dur, path)
 
     def remove(url: URL, elapsedTime: Duration): Option[Jpeg] =
         remove(Jpeg.fake(url, elapsedTime))
@@ -147,13 +156,13 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         Option(cache.get(jpeg.videoUrl)) match
             case None        => None
             case Some(jpegs) =>
-                jpegs.search(jpeg)(jpegOrdering) match
+                jpegs.search(jpeg)(using jpegOrdering) match
                     case Found(i) =>
                         val theJpeg = jpegs(i)
-                        val newList = ListUtil.removeAtIdx(i, jpegs)
+                        val newList = VectorUtil.removeAtIdx(i, jpegs)
                         cache.put(jpeg.videoUrl, newList)
                         // -- The cache size is updated here
-                        cacheSizeMB.getAndUpdate(i => i - theJpeg.sizeMB.getOrElse(0d))
+                        theJpeg.sizeMB.foreach(size => cacheSizeMB.updateAndGet(i => i - size))
                         Some(theJpeg)
                     case _        => None
 
@@ -196,7 +205,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         if Files.exists(jpeg.path) then Files.delete(jpeg.path)
 
     /** On start we check the disk and load any jpegs already in the cache */
-    private def scanCache(): Unit = synchronized:
+    def scanCache(): Unit = synchronized:
         cache.clear()
         val visitor = new java.nio.file.SimpleFileVisitor[Path]:
             override def visitFile(
@@ -221,3 +230,10 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                     else log.atWarn.log(() => s"Unable to delete ${jpeg.path} from cache root directory")
             )
         cache.clear()
+
+
+    def totalImages: Int = cache.values().asScala.map(_.size).sum
+    def imageCount(url: URL): Int =
+        Option(cache.get(url)) match
+            case None        => 0
+            case Some(jpegs) => jpegs.size

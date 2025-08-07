@@ -2,9 +2,9 @@
 
 ![Build](https://github.com/mbari-org/beholder/actions/workflows/test.yml/badge.svg)
 
-![MBARI logo](src/docs/images/logo-mbari-3b.png)
+![MBARI logo](src/docs/_assets/images/logo-mbari-3b.png)
 
-<img src="src/docs/images/beholder.png" alt="beholder" width="250"/>
+<img src="src/docs/_assets/images/beholder.png" alt="beholder" width="250"/>
 
 ## Overview
 
@@ -27,6 +27,6 @@ Documentation is at <https://mbari-org.github.io/beholder/>
 
 ## Notes
 
-Documentation can be added as markdown files in `src/docs` and will be included automatically when you run `laikaSite`.
+Documentation can be added as markdown files in `src/docs` and will be included automatically when you run `scaladoc`.
 
-[Beholder image](docs/images/beholder.png) Copyright © 2022 Aine Schlining
+[Beholder image](docs/_assets/images/beholder.png) Copyright © 2022 Aine Schlining

@@ -1,8 +1,3 @@
-import laika.ast
-import laika.helium.config.HeliumIcon
-import laika.helium.config.IconLink
-import laika.theme.config.Color
-import laika.helium.Helium
 import com.typesafe.sbt.packager.docker.CmdLike
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.docker.Cmd
@@ -11,14 +6,23 @@ import Dependencies._
 Docker / maintainer           := "Brian Schlining <brian@mbari.org>"
 Docker / packageName          := "mbari/beholder"
 Global / onChangedBuildSource := ReloadOnSourceChanges
-// Laika / sourceDirectories := Seq(baseDirectory.value / "docs")
-
-ThisBuild / scalaVersion     := "3.7.2"
 ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
+ThisBuild / scalaVersion     := "3.7.2"
 ThisBuild / startYear        := Some(2022)
 ThisBuild / versionScheme    := Some("semver-spec")
+
+Compile / doc / scalacOptions ++= Seq(
+    "-groups",
+    "-project-footer",
+    "Monterey Bay Aquarium Research Institute",
+    "-siteroot",
+    "src/docs",
+    "-doc-root-content",
+    "./src/docs/index.md"
+)
+
 
 // Hack to get the apt-get command in the right place in the docker file
 // Inserts apt-get before user is changed to non-root
@@ -38,8 +42,7 @@ lazy val root = project
     AutomateHeaderPlugin, 
     GitBranchPrompt, 
     GitVersioning, 
-    JavaAppPackaging, 
-    LaikaPlugin)
+    JavaAppPackaging)
   .settings(
     name := "beholder",
     dockerBaseImage    := "eclipse-temurin:24",
@@ -58,23 +61,6 @@ lazy val root = project
     git.useGitDescribe := true,
     // sbt-header
     javacOptions ++= Seq("-target", "17", "-source", "17"),
-    laikaTheme := Helium.defaults
-      .site
-      .topNavigationBar(
-        navLinks = Seq(
-          IconLink.external("https://github.com/mbari-org/beholder", HeliumIcon.github),
-          IconLink.internal(ast.Path.Root / "api" / "index.html", HeliumIcon.api)
-        )
-      ).build, 
-    laikaExtensions := Seq(
-      laika.markdown.github.GitHubFlavor, 
-      laika.parse.code.SyntaxHighlighting
-    ),
-    laikaIncludeAPI := true,
-    
-    // resolvers ++= Seq(
-    //   Resolver.githubPackages("mbari-org", "maven")
-    // ),
     libraryDependencies ++= Seq(
       auth0,
       auth0jwk,
