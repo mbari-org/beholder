@@ -9,7 +9,7 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 ThisBuild / licenses          := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 ThisBuild / organization     := "org.mbari"
 ThisBuild / organizationName := "MBARI"
-ThisBuild / scalaVersion     := "3.7.2"
+ThisBuild / scalaVersion     := "3.8.2"
 ThisBuild / startYear        := Some(2022)
 ThisBuild / versionScheme    := Some("semver-spec")
 
@@ -45,7 +45,7 @@ lazy val root = project
     JavaAppPackaging)
   .settings(
     name := "beholder",
-    dockerBaseImage    := "eclipse-temurin:24",
+    dockerBaseImage    := "eclipse-temurin:25",
     dockerCommands := buildDocker(dockerCommands.value),
     dockerEntrypoint := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
     dockerExposedPorts := Seq(8080),
@@ -60,7 +60,7 @@ lazy val root = project
     },
     git.useGitDescribe := true,
     // sbt-header
-    javacOptions ++= Seq("-target", "17", "-source", "17"),
+    javacOptions ++= Seq("-target", "25", "-source", "25"),
     libraryDependencies ++= Seq(
       auth0,
       auth0jwk,

@@ -59,7 +59,7 @@ class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: Execu
                 Future {
                     for
                         _    <- if apiKey == xApiKey then Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
-                        url  <- captureRequest.url
+                        url  <- captureRequest.uri
                         jpeg <-
                             jpegCapture.capture(
                                 url,

@@ -118,7 +118,7 @@ object Main:
             log.atInfo.log(() => s"Creating cache directory: $cacheRoot")
             Files.createDirectories(cacheRoot)
 
-        val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
+        val jpegCache        = JpegCache2(cacheRoot, cacheSizeMb, freePct)
         val jpegCapture      = JpegCapture(jpegCache)
         val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
         val healthEndpoints  = HealthEndpoints()

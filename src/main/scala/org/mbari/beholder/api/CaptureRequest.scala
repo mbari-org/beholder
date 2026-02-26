@@ -28,6 +28,6 @@ import java.net.URI
  */
 final case class CaptureRequest(videoUrl: String, elapsedTimeMillis: Long):
     lazy val elapsedTime: Duration      = Duration.ofMillis(elapsedTimeMillis)
-    lazy val url: Either[ErrorMsg, URL] = Try(URI.create(videoUrl).toURL()) match
+    lazy val uri: Either[ErrorMsg, URI] = Try(URI.create(videoUrl)) match
         case scala.util.Failure(_) => Left(NotFound(s"$videoUrl is not a valid URL"))
         case Success(u)            => Right(u)

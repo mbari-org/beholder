@@ -24,11 +24,11 @@ import org.mbari.beholder.TestUtil
 
 class FfmpegUtilSuite extends munit.FunSuite:
 
-  private val videoUrl = TestUtil.bigBuckBunny
+  private val videoUri = TestUtil.bigBuckBunny.toURI
   
   test("frameCapture"):
     val path = Paths.get("target", "trashme.jpg")
-    FfmpegUtil.frameCapture(videoUrl, Duration.ofMillis(250), path) match
+    FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path) match
       case Left(e) =>
         fail(s"File was not created at $path")
       case Right(v) =>

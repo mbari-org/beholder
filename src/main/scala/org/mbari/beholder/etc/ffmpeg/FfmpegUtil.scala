@@ -16,11 +16,12 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.nio.file.Path
 import java.time.Duration
 import org.mbari.beholder.etc.jdk.DurationUtil
 import org.mbari.beholder.etc.jdk.Logging.given
+
 import scala.util.{Failure, Success, Try}
 import sys.process.*
 
@@ -32,7 +33,7 @@ object FfmpegUtil:
 
     /**
      * Capture a frame from a video at a given time and save it to a file.
-     * @param videoUrl
+     * @param videoUri
      *   The video to fetch from
      * @param elapsedTime
      *   The time into the video to grab a frame
@@ -42,11 +43,11 @@ object FfmpegUtil:
      *   By default ffmpeg will return "frame accutrate" capture. If you want the nearest preceding keyframe, use false
      */
     def frameCapture(
-        videoUrl: URL,
-        elapsedTime: Duration,
-        target: Path,
-        accurate: Boolean = true,
-        skipNonKeyFrames: Boolean = false
+                        videoUri: URI,
+                        elapsedTime: Duration,
+                        target: Path,
+                        accurate: Boolean = true,
+                        skipNonKeyFrames: Boolean = false
     ): Either[Throwable, Path] =
         val time = DurationUtil.toHMS(elapsedTime)
         /*
@@ -60,7 +61,7 @@ object FfmpegUtil:
         val nas  = if !accurate then "-noaccurate_seek" else ""
         val snk  = if skipNonKeyFrames then "-skip_frame nokey" else ""
         val cmd  =
-            s"ffmpeg -ss $time ${snk} ${nas} -i $videoUrl -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
+            s"ffmpeg -ss $time ${snk} ${nas} -i $videoUri -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
         log.atDebug.log(() => s"Executing $cmd")
         Try(cmd.!!).map(_ => target).toEither
 

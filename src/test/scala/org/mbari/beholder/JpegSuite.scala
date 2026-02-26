@@ -26,10 +26,10 @@ class JpegSuite extends munit.FunSuite:
     val root = TestUtil.root
     val videoUrl = TestUtil.bigBuckBunny
     val duration = Duration.ofMillis(1234)
-    val jpeg = Jpeg.toPath(root, videoUrl, duration)
+    val jpeg = Jpeg.toPath(root, videoUrl.toURI, duration)
     assertTrue(PathUtil.isChild(root, jpeg.path))
     assertEquals(jpeg.elapsedTime, duration)
-    assertEquals(jpeg.videoUrl, videoUrl)
+    assertEquals(jpeg.videoUri, videoUrl.toURI)
     assertEquals(jpeg.path.getFileName().toString(), "00_00_01.234.jpg")
   
 

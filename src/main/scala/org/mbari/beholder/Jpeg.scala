@@ -25,7 +25,7 @@ import java.net.URI
 
 /**
  * Information about the source of a JPEG
- * @param videoUrl
+ * @param videoUri
  *   The URL to the source video
  * @param elapsedTime
  *   The elapsed time into the video that the jpeg was taken
@@ -37,11 +37,11 @@ import java.net.URI
  *   The size of the jpeg file in bytes
  */
 case class Jpeg(
-    videoUrl: URL,
-    elapsedTime: Duration,
-    path: Path,
-    created: Instant = Instant.now(),
-    sizeBytes: Option[Long] = None
+                   videoUri: URI,
+                   elapsedTime: Duration,
+                   path: Path,
+                   created: Instant = Instant.now(),
+                   sizeBytes: Option[Long] = None
 ):
     val sizeMB: Option[Double] = sizeBytes.map(NumberUtil.byteToMB)
 
@@ -51,18 +51,18 @@ object Jpeg:
      * Generates jpeg info
      * @param root
      *   The root directory of the cache
-     * @param url
+     * @param uri
      *   The video url
      * @param elapsedTime
      *   The elapsed tie into the video
      * @return
      *   The jpeg info
      */
-    def toPath(root: Path, url: URL, elapsedTime: Duration): Jpeg =
+    def toPath(root: Path, uri: URI, elapsedTime: Duration): Jpeg =
         val filename = DurationUtil.toHMS(elapsedTime).replace(":", "_") + ".jpg"
-        val parent   = PathUtil.toPath(root, url)
+        val parent   = PathUtil.toPath(root, uri.toURL)
         val path     = parent.resolve(filename)
-        Jpeg(url, elapsedTime, path)
+        Jpeg(uri, elapsedTime, path)
 
     /**
      * Generates Jpeg info
@@ -82,11 +82,11 @@ object Jpeg:
                     val filename    = PathUtil.dropExtension(file).replace("_", ":")
                     val elapsedTime = DurationUtil.fromHMS(filename)
                     val size        = if Files.isRegularFile(file) then Some(Files.size(file)) else None
-                    Jpeg(videoUrl, elapsedTime, file, sizeBytes = size)
+                    Jpeg(videoUrl.toURI, elapsedTime, file, sizeBytes = size)
                 )
         else None
 
-    private val fakeUrl  = URI.create("http://www.mbari.org").toURL()
+    private val fakeUrl  = URI.create("http://www.mbari.org")
     private val fakePath = Paths.get("/foo/bar.jpg")
 
     /**
@@ -94,4 +94,4 @@ object Jpeg:
      * @param elapsedTime
      */
     def fake(elapsedTime: Duration): Jpeg     = Jpeg(fakeUrl, elapsedTime, fakePath)
-    def fake(url: URL, elapsedTime: Duration) = Jpeg(url, elapsedTime, fakePath)
+    def fake(uri: URI, elapsedTime: Duration) = Jpeg(uri, elapsedTime, fakePath)

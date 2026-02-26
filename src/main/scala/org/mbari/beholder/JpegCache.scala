@@ -21,16 +21,21 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.{Duration, Instant}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ConcurrentHashMap
-import java.util.EnumSet
+import java.util.concurrent.ConcurrentSkipListSet
+import java.util.{Comparator, EnumSet, TreeMap}
 import org.mbari.beholder.etc.ffmpeg.DurationString.*
 import org.mbari.beholder.etc.jdk.{DurationUtil, PathUtil}
 import org.mbari.beholder.etc.jdk.Logging.given
 import org.mbari.beholder.util.{ListUtil, NumberUtil}
+
 import scala.collection.Searching.Found
 import scala.concurrent.duration.Duration.apply
 import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
 import org.mbari.beholder.util.VectorUtil
+
+import java.net.URI
+import scala.collection.mutable
 
 /**
  * In memory cache of paths to Jpegs that were captured. The cache is organized by videoUrl and elpased time into the
@@ -47,7 +52,7 @@ import org.mbari.beholder.util.VectorUtil
  * @param cacheClearPct
  *   When the maxCacheSizeMB is receached this, disk will be freed equal to maxCacheSizeMb * cacheClearPct
  */
-class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20):
+class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20) extends ImageCache:
 
     require(Files.isDirectory(root), "root must be a directory")
     require(Files.isWritable(root), "root must be writable")
@@ -60,11 +65,13 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
 
     private given jpegOrdering: Ordering[Jpeg] = Ordering.by(_.elapsedTime)
 
+    private val jpegComparator: Comparator[Jpeg] = Comparator.comparing(j => j.elapsedTime)
+
     /**
      * A synchronized map. The URL is the video URL. The list is a sorted (by elapsedTime/elapsed time into the video)
      * immutable list.
      */
-    private val cache: ConcurrentHashMap[URL, Vector[Jpeg]] =
+    private val cache: ConcurrentHashMap[URI, mutable.TreeSet[Jpeg]] =
         new ConcurrentHashMap()
 
     /** Tracks current cache size */
@@ -81,27 +88,11 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
      * @return
      *   The jpeg in the cache
      */
-    def get(jpeg: Jpeg): Option[Jpeg] =
-        Option(cache.get(jpeg.videoUrl)) match
+    override def get(jpeg: Jpeg): Option[Jpeg] =
+        Option(cache.get(jpeg.videoUri)) match
             case None        => None
-            case Some(jpegs) =>
-                jpegs.search(jpeg)(using jpegOrdering) match
-                    case Found(i) => Some(jpegs(i))
-                    case _        => None
-
-    def get(url: URL, elapsedTime: DurationString): Option[Jpeg] =
-        DurationString.unapply(elapsedTime) match
-            case None        => None
-            case Some(dur)  => get(url, dur)
-
-    /**
-     * @param url
-     *   The video URL
-     * @param elapsedTime
-     *   The elapsed time into the video
-     */
-    def get(url: URL, elapsedTime: Duration): Option[Jpeg] =
-        get(Jpeg.fake(url, elapsedTime))
+            case Some(jpegs) => jpegs.find(_.elapsedTime == jpeg.elapsedTime)
+    
 
     /**
      * Store a jpeg in the cache
@@ -110,7 +101,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
      * @return
      *   The stored jpeg
      */
-    def put(jpeg: Jpeg): Jpeg =
+    override def put(jpeg: Jpeg): Jpeg =
         synchronized:
             // By changing the date to now, it's always the last item in the list, so
             // no sorting needed to keep the list ordered by time. Sadly appending is O(n)
@@ -120,51 +111,32 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
             // cache.put(jpeg.videoUrl, newList)
 
             cache.compute(
-                jpeg.videoUrl, 
-                (_, oldList) => (Option(oldList).getOrElse(Vector.empty) :+ newJpeg)
+                jpeg.videoUri,
+                (_, oldList) => Option(oldList).getOrElse(mutable.TreeSet.empty).addOne(newJpeg)
             )
             // -- Cache size is updated and/or freed here
             jpeg.sizeMB.foreach(s => freeDisk(cacheSizeMB.accumulateAndGet(s, (a, b) => a + b)))
             jpeg
 
-    /**
-     * Store a jpeg in the cache
-     * @param url
-     *   The video URL
-     * @param elapsedTime
-     *   The elasped time into the video
-     * @param path
-     *   The on disk location of the jpeg. It must be under the cache's root directory
-     */
-    def put(url: URL, elapsedTime: Duration, path: Path): Option[Jpeg] =
-        Jpeg.fromPath(root, path).map(put)
-
-    def put(url: URL, elapsedTime: DurationString, path: Path): Option[Jpeg] =
-        DurationString.unapply(elapsedTime) match
-            case None        => None
-            case Some(dur)  => put(url, dur, path)
-
-    def remove(url: URL, elapsedTime: Duration): Option[Jpeg] =
-        remove(Jpeg.fake(url, elapsedTime))
+    
+    
 
     /**
      * Remove a jpeg from the cache.
      * @param jpeg
      *   the jpeg to remove
      */
-    def remove(jpeg: Jpeg): Option[Jpeg] = synchronized:
-        Option(cache.get(jpeg.videoUrl)) match
+    override def remove(jpeg: Jpeg): Option[Jpeg] = synchronized:
+        Option(cache.get(jpeg.videoUri)) match
             case None        => None
             case Some(jpegs) =>
-                jpegs.search(jpeg)(using jpegOrdering) match
-                    case Found(i) =>
-                        val theJpeg = jpegs(i)
-                        val newList = VectorUtil.removeAtIdx(i, jpegs)
-                        cache.put(jpeg.videoUrl, newList)
-                        // -- The cache size is updated here
-                        theJpeg.sizeMB.foreach(size => cacheSizeMB.updateAndGet(i => i - size))
-                        Some(theJpeg)
-                    case _        => None
+                get(jpeg).map { theJpeg =>
+                    jpegs.remove(theJpeg)
+                    // -- The cache size is updated here
+                    theJpeg.sizeMB.foreach(size => cacheSizeMB.updateAndGet(i => i - size))
+                    theJpeg
+                }
+
 
     /**
      * Checks the cache size and frees up disk if needed
@@ -174,9 +146,9 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
     private def freeDisk(currentSizeMB: Double): Unit =
         if currentSizeMB >= maxCacheSizeMB then
 
-            val dropSize = currentSizeMB * cacheClearPct
+            val toDelete = synchronized:
+                val dropSize = currentSizeMB * cacheClearPct
 
-            synchronized:
                 var jpegs = cache
                     .asScala
                     .values
@@ -195,23 +167,23 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                     .atDebug
                     .log(() => s"Freeing $numToDrop jpegs from the cache")
 
-                jpegs
-                    .take(numToDrop)
-                    .foreach(dropJpeg)
+                val gonners = jpegs.take(numToDrop)
+                gonners.foreach(j => remove(j.videoUri, j.elapsedTime)) // remove from cache
+                gonners
 
-    /** helper function tor remove a jpeg from cache and disk */
-    private def dropJpeg(jpeg: Jpeg): Unit =
-        remove(jpeg.videoUrl, jpeg elapsedTime)
-        if Files.exists(jpeg.path) then Files.delete(jpeg.path)
+            // delte from disk outside syncronized block
+            toDelete.foreach(j => if Files.exists(j.path) then Files.delete(j.path))
+
+
 
     /** On start we check the disk and load any jpegs already in the cache */
     def scanCache(): Unit = synchronized:
         cache.clear()
         val visitor = new java.nio.file.SimpleFileVisitor[Path]:
             override def visitFile(
-                file: Path,
-                attrs: java.nio.file.attribute.BasicFileAttributes
-            ): java.nio.file.FileVisitResult =
+                                      file: Path,
+                                      attrs: java.nio.file.attribute.BasicFileAttributes
+                                  ): java.nio.file.FileVisitResult =
                 Jpeg.fromPath(root, file).foreach(j => put(j))
                 java.nio.file.FileVisitResult.CONTINUE
         Files.walkFileTree(root, visitor)
