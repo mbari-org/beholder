@@ -90,7 +90,9 @@ class ImageCapture(cache: ImageCache):
                         val sizeBytes = Files.size(path)
                         val theImage   = cachedImage.copy(path = path, sizeBytes = Some(sizeBytes))
                         cache.put(theImage)
-                        log.atDebug.log(() => s"Captured image (${imageType.mediaType} at ${DurationUtil.toHMS(elapsedTime)} from $videoUri")
+                        log.atDebug.log(() =>
+                            s"Captured image (${imageType.mediaType}) at ${DurationUtil.toHMS(elapsedTime)} from $videoUri"
+                        )
                         theImage
                     match
                         case Failure(exception) =>
