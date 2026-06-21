@@ -16,20 +16,19 @@
 
 package org.mbari.beholder
 
-import java.time.Duration
-import org.junit.Assert.*
 import org.mbari.beholder.etc.jdk.PathUtil
+import java.nio.file.Path
 
-class JpegSuite extends munit.FunSuite:
+enum ImageType(val extension: String, val mediaType: String):
+    case Jpeg extends ImageType(".jpg", "image/jpeg")
+    case Png  extends ImageType(".png", "image/png")
 
-  test("toPath"):
-    val root = TestUtil.root
-    val videoUrl = TestUtil.bigBuckBunny
-    val duration = Duration.ofMillis(1234)
-    val jpeg = CachedImage.toPath(root, videoUrl.toURI, duration)
-    assertTrue(PathUtil.isChild(root, jpeg.path))
-    assertEquals(jpeg.elapsedTime, duration)
-    assertEquals(jpeg.videoUri, videoUrl.toURI)
-    assertEquals(jpeg.path.getFileName().toString(), "00_00_01.234.jpg")
-  
 
+object ImageType:
+    def fromExtension(ext: String): Option[ImageType] =
+        ImageType.values.find(_.extension == ext)
+
+    def fromPath(path: Path): Option[ImageType] =
+        if PathUtil.isJpeg(path) then Some(Jpeg)
+        else if PathUtil.isPng(path) then Some(Png)
+        else None

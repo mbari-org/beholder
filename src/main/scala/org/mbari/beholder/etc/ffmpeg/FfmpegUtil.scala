@@ -16,6 +16,8 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
+import org.mbari.beholder.ImageType
+
 import java.net.{URI, URL}
 import java.nio.file.Path
 import java.time.Duration
@@ -30,6 +32,50 @@ import sys.process.*
  */
 object FfmpegUtil:
     private val log = System.getLogger(getClass.getName())
+
+    private def buildPngCommand(videoUri: URI,
+                                elapsedTime: Duration,
+                                target: Path,
+                                accurate: Boolean = true,
+                                skipNonKeyFrames: Boolean = false): Seq[String] =
+        val time = DurationUtil.toHMS(elapsedTime)
+
+        Seq("ffmpeg") ++
+                Seq("-ss", time) ++
+                Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
+                Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
+                Seq(
+                    "-i", videoUri.toString,
+                    "-frames:v", "1",
+                    "-c:v", "png",
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-y",
+                    target.toString
+                )
+
+    private def buildJpegCommand(videoUri: URI,
+                                 elapsedTime: Duration,
+                                 target: Path,
+                                 accurate: Boolean = true,
+                                 skipNonKeyFrames: Boolean = false): Seq[String] =
+        val time = DurationUtil.toHMS(elapsedTime)
+
+        Seq("ffmpeg") ++
+            Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
+            Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
+            Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
+            Seq(
+                "-i", videoUri.toString, // input file or URL
+                "-frames:v", "1",        // Frame quality 1 (best) to 5
+                "-qmin", "1",            //
+                "-q:v", "1",             //
+                "-hide_banner",          // Make quiet
+                "-loglevel", "error",    // Make quieter
+                "-y",                    // Automatically overwrites the output file if it already exists.
+                target.toString          // The output filename for the extracted frame.
+            )
+
 
     /**
      * Capture a frame from a video at a given time and save it to a file.
@@ -49,21 +95,14 @@ object FfmpegUtil:
                         accurate: Boolean = true,
                         skipNonKeyFrames: Boolean = false
     ): Either[Throwable, Path] =
-        val time = DurationUtil.toHMS(elapsedTime)
-        /*
-     -ss Seek.        This needs to be first. If it's after -i the capture is MUCH slower
-     -i               Input file or URL
-     -frames:v 1      Frame quality 1 (best) to 5
-     -q:v 1           ?
-     -hide_banner     Make quiet
-     -loglevel error  Make quieter
-         */
-        val nas  = if !accurate then "-noaccurate_seek" else ""
-        val snk  = if skipNonKeyFrames then "-skip_frame nokey" else ""
-        val cmd  =
-            s"ffmpeg -ss $time ${snk} ${nas} -i $videoUri -frames:v 1 -qmin 1 -q:v 1 -hide_banner -loglevel error -y $target"
-        log.atDebug.log(() => s"Executing $cmd")
-        Try(cmd.!!).map(_ => target).toEither
+        val cmd = ImageType.fromPath(target) match
+            case ImageType.Jpeg => buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
+            case ImageType.Png  => buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
+            case _              => return Left(new IllegalArgumentException(s"Unsupported image type for path $target"))
+
+        log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
+
+        Try(Process(cmd).!!).map(_ => target).toEither
 
             /*
       Argument Breakdown:

@@ -25,6 +25,10 @@ import java.net.URI
 
 object PathUtil:
 
+    def useExtension(path: Path, extension: String): Path =
+        val newPath = path.getFileName.toString.replaceFirst("\\.[^.]+$", "") + extension
+        path.resolveSibling(newPath)
+
     /**
      * Checks if a path is a child of another path
      * @param parent
@@ -51,6 +55,13 @@ object PathUtil:
         else
             val ext = path.getFileName.toString.toLowerCase
             ext.endsWith(".jpg") || ext.endsWith(".jpeg")
+
+    def isPng(path: Path): Boolean =
+        if Files.isDirectory(path) then false
+        else
+            val ext = path.getFileName.toString.toLowerCase
+            ext.endsWith(".png")
+
 
     /**
      * Grabs the filename without an extension from a path

@@ -16,12 +16,17 @@
 
 package org.mbari.beholder
 
+import org.mbari.beholder.ImageType.Jpeg
+
 import java.net.URL
 import java.nio.file.{Files, Path, Paths}
 import java.time.{Duration, Instant}
 import org.mbari.beholder.etc.jdk.{DurationUtil, PathUtil}
 import org.mbari.beholder.util.NumberUtil
+
 import java.net.URI
+
+
 
 /**
  * Information about the source of a JPEG
@@ -36,19 +41,20 @@ import java.net.URI
  * @param sizeBytes
  *   The size of the jpeg file in bytes
  */
-case class Jpeg(
+case class CachedImage(
                    videoUri: URI,
                    elapsedTime: Duration,
                    path: Path,
                    created: Instant = Instant.now(),
-                   sizeBytes: Option[Long] = None
+                   sizeBytes: Option[Long] = None,
+                   imageType: ImageType = ImageType.Jpeg
 ):
     val sizeMB: Option[Double] = sizeBytes.map(NumberUtil.byteToMB)
 
-object Jpeg:
+object CachedImage:
 
     /**
-     * Generates jpeg info
+     * Generates cachedImage info
      * @param root
      *   The root directory of the cache
      * @param uri
@@ -56,42 +62,53 @@ object Jpeg:
      * @param elapsedTime
      *   The elapsed tie into the video
      * @return
-     *   The jpeg info
+     *   The cachedImage info
      */
-    def toPath(root: Path, uri: URI, elapsedTime: Duration): Jpeg =
-        val filename = DurationUtil.toHMS(elapsedTime).replace(":", "_") + ".jpg"
+    def toPath(root: Path, uri: URI, elapsedTime: Duration, imageType: ImageType = Jpeg): CachedImage =
+        val filename = DurationUtil.toHMS(elapsedTime).replace(":", "_") + imageType.extension
         val parent   = PathUtil.toPath(root, uri.toURL)
         val path     = parent.resolve(filename)
-        Jpeg(uri, elapsedTime, path)
+        CachedImage(uri, elapsedTime, path, imageType = imageType)
 
     /**
-     * Generates Jpeg info
+     * Generates cachedImage info
      * @param root
      *   The root directory of the cache
      * @param file
      *   the jpeg file (must be under the root fo the cache directory)
      * @return
-     *   A jpeg info. None the file is not a jpeg or if it's not under the cache directory
+     *   A cachedImage info. None the file is not a cachedImage or if it's not under the cache directory
      */
-    def fromPath(root: Path, file: Path): Option[Jpeg] =
-        if !Files.isDirectory(file) && PathUtil.isChild(root, file) && PathUtil.isJpeg(file) then
+    def fromPath(root: Path, file: Path): Option[CachedImage] =
+        if !Files.isDirectory(file) && PathUtil.isChild(root, file) && (PathUtil.isJpeg(file) || PathUtil.isPng(file)) then
             val parent = file.getParent
-            PathUtil
-                .fromPath(root, parent)
-                .map(videoUrl =>
-                    val filename    = PathUtil.dropExtension(file).replace("_", ":")
-                    val elapsedTime = DurationUtil.fromHMS(filename)
-                    val size        = if Files.isRegularFile(file) then Some(Files.size(file)) else None
-                    Jpeg(videoUrl.toURI, elapsedTime, file, sizeBytes = size)
-                )
+            val opt = ImageType.fromPath(file)
+
+            opt.flatMap(imageType => {
+                PathUtil
+                    .fromPath(root, parent)
+                    .map(videoUrl =>
+                        val filename = PathUtil.dropExtension(file).replace("_", ":")
+                        val elapsedTime = DurationUtil.fromHMS(filename)
+                        val size = if Files.isRegularFile(file) then Some(Files.size(file)) else None
+                        CachedImage(videoUrl.toURI, elapsedTime, file, sizeBytes = size, imageType = imageType)
+                    )
+            })
+
+
         else None
 
     private val fakeUrl  = URI.create("http://www.mbari.org")
-    private val fakePath = Paths.get("/foo/bar.jpg")
+    private val fakePath = Paths.get("/foo/bar")
 
     /**
      * Constructs a fake/mock jpeg that is useful for searchies
      * @param elapsedTime
      */
-    def fake(elapsedTime: Duration): Jpeg     = Jpeg(fakeUrl, elapsedTime, fakePath)
-    def fake(uri: URI, elapsedTime: Duration) = Jpeg(uri, elapsedTime, fakePath)
+    def fake(elapsedTime: Duration, imageType: ImageType): CachedImage =
+        val path = PathUtil.useExtension(fakePath, imageType.extension)
+        CachedImage(fakeUrl, elapsedTime, path, imageType = imageType )
+
+    def fake(uri: URI, elapsedTime: Duration, imageType: ImageType): CachedImage =
+        val path = PathUtil.useExtension(fakePath, imageType.extension)
+        CachedImage(uri, elapsedTime, path, imageType = imageType)

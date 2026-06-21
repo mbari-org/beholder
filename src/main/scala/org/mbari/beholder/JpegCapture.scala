@@ -51,8 +51,8 @@ class JpegCapture(cache: ImageCache):
                    elapsedTime: Duration,
                    accurate: Boolean = true,
                    skipNonKeyFrames: Boolean = false
-    ): Either[ErrorMsg, Jpeg] =
-        cache.get(videoUri, elapsedTime) match
+    ): Either[ErrorMsg, CachedImage] =
+        cache.get(videoUri, elapsedTime, ImageType.Jpeg) match
             case Some(jpeg) => Right(jpeg)
             case None       => grabFrame(videoUri, elapsedTime, accurate, skipNonKeyFrames)
 
@@ -61,8 +61,8 @@ class JpegCapture(cache: ImageCache):
                              elapsedTime: Duration,
                              accurate: Boolean,
                              skipNonKeyFrames: Boolean
-    ): Either[ErrorMsg, Jpeg] =
-        val jpeg = Jpeg.toPath(cache.root, videoUri, elapsedTime)
+    ): Either[ErrorMsg, CachedImage] =
+        val jpeg = CachedImage.toPath(cache.root, videoUri, elapsedTime, imageType = ImageType.Jpeg)
         if PathUtil.isChild(cache.root, jpeg.path) then
             val parent = jpeg.path.getParent()
             if !Files.exists(parent) then Files.createDirectories(parent)

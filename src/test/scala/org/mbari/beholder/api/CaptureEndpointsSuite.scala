@@ -22,7 +22,6 @@ import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.*
 import org.mbari.beholder.etc.circe.CirceCodecs.{given, *}
-import org.mbari.beholder.JpegCache
 import org.mbari.beholder.JpegCapture
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -41,7 +40,7 @@ class CaptureEndpointsSuite extends munit.FunSuite:
   // -- Set up cache
   private val root = TestUtil.root
   Files.createDirectories(root)
-  private val cache = JpegCache(root, 3, .3)
+  private val cache = JpegCache2(root, 3, .3)
   private val capture = JpegCapture(cache)
 
   private val videoUrl = TestUtil.bigBuckBunny
