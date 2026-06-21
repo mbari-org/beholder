@@ -119,7 +119,7 @@ object Main:
             Files.createDirectories(cacheRoot)
 
         val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
-        val jpegCapture      = JpegCapture(jpegCache)
+        val jpegCapture      = ImageCapture(jpegCache)
         val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
         val healthEndpoints  = HealthEndpoints()
         val swaggerEndpoints = SwaggerEndpoints(captureEndpoints, healthEndpoints)

@@ -32,7 +32,7 @@ import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
 
-class JpegCapture(cache: ImageCache):
+class ImageCapture(cache: ImageCache):
 
     private val log = System.getLogger(getClass.getName)
 

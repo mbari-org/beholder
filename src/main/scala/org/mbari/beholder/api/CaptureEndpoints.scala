@@ -23,11 +23,11 @@ import sttp.tapir.json.circe.*
 import org.mbari.beholder.etc.circe.CirceCodecs.given
 import sttp.tapir.server.ServerEndpoint
 import scala.concurrent.Future
-import org.mbari.beholder.JpegCapture
+import org.mbari.beholder.ImageCapture
 import java.net.URL
 import java.nio.file.Files
 
-class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: ExecutionContext) extends Endpoints:
+class CaptureEndpoints(imageCapture: ImageCapture, apiKey: String)(using ec: ExecutionContext) extends Endpoints:
 
     val captureEndpoint =
         baseEndpoint
@@ -61,7 +61,7 @@ class CaptureEndpoints(jpegCapture: JpegCapture, apiKey: String)(using ec: Execu
                         _    <- if apiKey == xApiKey then Right(()) else Left(Unauthorized("Invalid X-Api-Key"))
                         url  <- captureRequest.uri
                         jpeg <-
-                            jpegCapture.capture(
+                            imageCapture.capture(
                                 url,
                                 captureRequest.elapsedTime,
                                 accurateOpt.getOrElse(true),

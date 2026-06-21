@@ -95,14 +95,17 @@ object FfmpegUtil:
                         accurate: Boolean = true,
                         skipNonKeyFrames: Boolean = false
     ): Either[Throwable, Path] =
-        val cmd = ImageType.fromPath(target) match
-            case ImageType.Jpeg => buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
-            case ImageType.Png  => buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
-            case _              => return Left(new IllegalArgumentException(s"Unsupported image type for path $target"))
+        val cmd: Seq[String] = ImageType.fromPath(target) match
+            case Some(ImageType.Jpeg) => buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
+            case Some(ImageType.Png)  => buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
+            case _                    => Seq.empty
 
-        log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
+        if cmd.isEmpty then
+            Left(new IllegalArgumentException(s"Unsupported image type for target: $target"))
+        else
+            log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
+            Try(Process(cmd).!!).map(_ => target).toEither
 
-        Try(Process(cmd).!!).map(_ => target).toEither
 
             /*
       Argument Breakdown:
