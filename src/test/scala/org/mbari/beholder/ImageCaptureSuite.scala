@@ -24,7 +24,7 @@ class ImageCaptureSuite extends munit.FunSuite:
 
   val root = TestUtil.root
   Files.createDirectories(root)
-  val cache = JpegCache(root, 3, .3)
+  val cache = ImageCacheImpl(root, 3, .3)
   val capture = ImageCapture(cache)
 
 

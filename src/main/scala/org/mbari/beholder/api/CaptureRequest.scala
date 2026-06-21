@@ -16,10 +16,8 @@
 
 package org.mbari.beholder.api
 
-import java.net.URL
 import java.time.Duration
 import scala.util.Try
-import sttp.tapir.DecodeResult.Failure
 import scala.util.Success
 import java.net.URI
 

@@ -16,7 +16,7 @@
 
 package org.mbari.beholder
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.time.Duration
 import org.mbari.beholder.etc.ffmpeg.FfmpegUtil
 import org.mbari.beholder.etc.jdk.Logging.given
@@ -37,30 +37,38 @@ class ImageCapture(cache: ImageCache):
     private val log = System.getLogger(getClass.getName)
 
     /**
-      * Capture a frame from the video at the specified elapsed time. If the frame is 
-      * not already in the cache, it will be captured using ffmpeg and stored in the cache.
-      *
-      * @param videoUri The URL of the video to capture from
-      * @param elapsedTime The elapsed time into the video to capture the frame
-      * @param accurate If true, the frame will be captured at the exact elapsed time. If false, the frame will be captured at the nearest keyframe.
-      * @param skipNonKeyFrames If true, the capture will skip non-key frames. This is useful for videos that do not have keyframes at regular intervals.
-      * @return On success, a Right containing the information and location on disk of the captured Jpeg. On failure, a Left containing an ErrorMsg.
-      */
+     * Capture a frame from the video at the specified elapsed time. If the frame is not already in the cache, it will
+     * be captured using ffmpeg and stored in the cache.
+     *
+     * @param videoUri
+     *   The URL of the video to capture from
+     * @param elapsedTime
+     *   The elapsed time into the video to capture the frame
+     * @param accurate
+     *   If true, the frame will be captured at the exact elapsed time. If false, the frame will be captured at the
+     *   nearest keyframe.
+     * @param skipNonKeyFrames
+     *   If true, the capture will skip non-key frames. This is useful for videos that do not have keyframes at regular
+     *   intervals.
+     * @return
+     *   On success, a Right containing the information and location on disk of the captured Jpeg. On failure, a Left
+     *   containing an ErrorMsg.
+     */
     def capture(
-                   videoUri: URI,
-                   elapsedTime: Duration,
-                   accurate: Boolean = true,
-                   skipNonKeyFrames: Boolean = false
+        videoUri: URI,
+        elapsedTime: Duration,
+        accurate: Boolean = true,
+        skipNonKeyFrames: Boolean = false
     ): Either[ErrorMsg, CachedImage] =
         cache.get(videoUri, elapsedTime, ImageType.Jpeg) match
             case Some(jpeg) => Right(jpeg)
             case None       => grabFrame(videoUri, elapsedTime, accurate, skipNonKeyFrames)
 
     private def grabFrame(
-                             videoUri: URI,
-                             elapsedTime: Duration,
-                             accurate: Boolean,
-                             skipNonKeyFrames: Boolean
+        videoUri: URI,
+        elapsedTime: Duration,
+        accurate: Boolean,
+        skipNonKeyFrames: Boolean
     ): Either[ErrorMsg, CachedImage] =
         val jpeg = CachedImage.toPath(cache.root, videoUri, elapsedTime, imageType = ImageType.Jpeg)
         if PathUtil.isChild(cache.root, jpeg.path) then
@@ -81,12 +89,13 @@ class ImageCapture(cache: ImageCache):
                         log.atDebug.log(() => s"Captured image at ${DurationUtil.toHMS(elapsedTime)} from $videoUri")
                         theJpeg
                     match
-                        case Failure(exception) => 
+                        case Failure(exception) =>
                             log
                                 .withCause(exception)
                                 .atError
-                                .log(() => s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUri")
+                                .log(() =>
+                                    s"Failed to capture image at ${DurationUtil.toHMS(elapsedTime)} from $videoUri"
+                                )
                             Left(StatusMsg(s"Failed to capture frame from $videoUri at $elapsedTime", 500))
-                        case Success(value) => Right(value)
-                    
+                        case Success(value)     => Right(value)
         else Left(ServerError("An invalid cache path was calculated"))

@@ -18,7 +18,6 @@ package org.mbari.beholder.etc.jdk
 
 import java.nio.file.Paths
 import org.junit.Assert.*
-import java.net.URL
 import java.net.URI
 
 class PathUtilSuite extends munit.FunSuite:

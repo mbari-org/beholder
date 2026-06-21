@@ -16,11 +16,10 @@
 
 package org.mbari.beholder.api
 
-import org.mbari.beholder.{AppConfig, JpegCache, ImageCapture, TestUtil}
+import org.mbari.beholder.{AppConfig, ImageCacheImpl, ImageCapture, TestUtil}
 
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
-import org.junit.Assert.*
 import org.mbari.beholder.etc.circe.CirceCodecs.{*, given}
 
 import scala.concurrent.Await
@@ -39,7 +38,7 @@ class CaptureEndpointsSuite extends munit.FunSuite:
   // -- Set up cache
   private val root = TestUtil.root
   Files.createDirectories(root)
-  private val cache = JpegCache(root, 3, .3)
+  private val cache = ImageCacheImpl(root, 3, .3)
   private val capture = ImageCapture(cache)
 
   private val videoUrl = TestUtil.bigBuckBunny

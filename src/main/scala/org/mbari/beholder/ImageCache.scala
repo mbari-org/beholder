@@ -38,9 +38,9 @@ trait ImageCache:
      * Store a jpeg in the cache
      *
      * @param jpeg
-     * The jpeg to store
+     *   The jpeg to store
      * @return
-     * The stored jpeg
+     *   The stored jpeg
      */
     def put(cachedImage: CachedImage): CachedImage
 
@@ -48,7 +48,7 @@ trait ImageCache:
      * Remove a jpeg from the cache.
      *
      * @param jpeg
-     * the jpeg to remove
+     *   the jpeg to remove
      */
     def remove(cachedImage: CachedImage): Option[CachedImage]
 
@@ -56,8 +56,8 @@ trait ImageCache:
 
     def get(uri: URI, elapsedTime: DurationString, imageType: ImageType): Option[CachedImage] =
         DurationString.unapply(elapsedTime) match
-            case None        => None
-            case Some(dur)  => get(uri, dur, imageType)
+            case None      => None
+            case Some(dur) => get(uri, dur, imageType)
 
     /**
      * @param uri
@@ -68,26 +68,23 @@ trait ImageCache:
     def get(uri: URI, elapsedTime: Duration, imageType: ImageType): Option[CachedImage] =
         get(CachedImage.fake(uri, elapsedTime, imageType))
 
-
     /**
      * Store a cachedImage in the cache
      *
      * @param uri
-     * The video URL
+     *   The video URL
      * @param elapsedTime
-     * The elasped time into the video
+     *   The elasped time into the video
      * @param path
-     * The on disk location of the jpeg. It must be under the cache's root directory
+     *   The on disk location of the jpeg. It must be under the cache's root directory
      */
     def put(uri: URI, elapsedTime: Duration, path: Path): Option[CachedImage] =
         CachedImage.fromPath(root, path).map(put)
 
     def put(uri: URI, elapsedTime: DurationString, path: Path): Option[CachedImage] =
         DurationString.unapply(elapsedTime) match
-            case None => None
+            case None      => None
             case Some(dur) => put(uri, dur, path)
 
     def remove(uri: URI, elapsedTime: Duration, imageType: ImageType): Option[CachedImage] =
         remove(CachedImage.fake(uri, elapsedTime, imageType))
-
-

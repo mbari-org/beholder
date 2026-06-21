@@ -16,8 +16,8 @@
 
 package org.mbari.beholder.etc.zio
 
-import zio.*
 import org.mbari.beholder.etc.jdk.Logging.given
+import zio.*
 import zio.Cause.Die
 
 object ZioUtil:

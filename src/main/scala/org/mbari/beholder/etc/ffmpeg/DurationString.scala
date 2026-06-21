@@ -16,8 +16,9 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-import java.time.Duration
 import org.mbari.beholder.etc.jdk.DurationUtil
+
+import java.time.Duration
 import scala.util.Try
 
 /**

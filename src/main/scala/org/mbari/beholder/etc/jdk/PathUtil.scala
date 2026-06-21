@@ -19,7 +19,6 @@ package org.mbari.beholder.etc.jdk
 import java.nio.file.Path
 import java.net.URL
 import java.nio.file.Paths
-import org.mbari.beholder.etc.ffmpeg.DurationString.DurationString
 import java.nio.file.Files
 import java.net.URI
 
@@ -61,7 +60,6 @@ object PathUtil:
         else
             val ext = path.getFileName.toString.toLowerCase
             ext.endsWith(".png")
-
 
     /**
      * Grabs the filename without an extension from a path

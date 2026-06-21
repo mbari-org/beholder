@@ -23,7 +23,6 @@ import java.net.URL
 import org.mbari.beholder.util.HexUtil
 import org.mbari.beholder.api.{NotFound, ServerError, StatusMsg, Unauthorized}
 import org.mbari.beholder.api.CaptureRequest
-import scala.CanEqual.derived
 import org.mbari.beholder.api.HealthStatus
 import java.net.URI
 

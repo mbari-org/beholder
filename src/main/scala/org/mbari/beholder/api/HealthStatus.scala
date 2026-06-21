@@ -17,6 +17,7 @@
 package org.mbari.beholder.api
 
 import org.mbari.beholder.AppConfig
+
 import java.net.InetAddress
 
 final case class HealthStatus(

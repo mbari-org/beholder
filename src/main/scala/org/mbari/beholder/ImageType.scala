@@ -17,12 +17,12 @@
 package org.mbari.beholder
 
 import org.mbari.beholder.etc.jdk.PathUtil
+
 import java.nio.file.Path
 
 enum ImageType(val extension: String, val mediaType: String):
     case Jpeg extends ImageType(".jpg", "image/jpeg")
     case Png  extends ImageType(".png", "image/png")
-
 
 object ImageType:
     def fromExtension(ext: String): Option[ImageType] =

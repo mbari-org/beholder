@@ -18,7 +18,7 @@ package org.mbari.beholder.etc.ffmpeg
 
 import org.mbari.beholder.ImageType
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.nio.file.{Files, Path}
 import java.time.Duration
 import org.mbari.beholder.etc.jdk.DurationUtil
@@ -36,32 +36,40 @@ object FfmpegUtil:
     private val ffmpegExecutable: String =
         sys.props.getOrElse("beholder.ffmpeg.path", "ffmpeg")
 
-    private def buildPngCommand(videoUri: URI,
-                                elapsedTime: Duration,
-                                target: Path,
-                                accurate: Boolean = true,
-                                skipNonKeyFrames: Boolean = false): Seq[String] =
+    private def buildPngCommand(
+        videoUri: URI,
+        elapsedTime: Duration,
+        target: Path,
+        accurate: Boolean = true,
+        skipNonKeyFrames: Boolean = false
+    ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
         Seq(ffmpegExecutable) ++
-                Seq("-ss", time) ++
-                Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
-                Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
-                Seq(
-                    "-i", videoUri.toString,
-                    "-frames:v", "1",
-                    "-c:v", "png",
-                    "-hide_banner",
-                    "-loglevel", "error",
-                    "-y",
-                    target.toString
-                )
+            Seq("-ss", time) ++
+            Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
+            Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
+            Seq(
+                "-i",
+                videoUri.toString,
+                "-frames:v",
+                "1",
+                "-c:v",
+                "png",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                target.toString
+            )
 
-    private def buildJpegCommand(videoUri: URI,
-                                 elapsedTime: Duration,
-                                 target: Path,
-                                 accurate: Boolean = true,
-                                 skipNonKeyFrames: Boolean = false): Seq[String] =
+    private def buildJpegCommand(
+        videoUri: URI,
+        elapsedTime: Duration,
+        target: Path,
+        accurate: Boolean = true,
+        skipNonKeyFrames: Boolean = false
+    ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
         Seq(ffmpegExecutable) ++
@@ -69,14 +77,19 @@ object FfmpegUtil:
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
             Seq(
-                "-i", videoUri.toString, // input file or URL
-                "-frames:v", "1",        // Frame quality 1 (best) to 5
-                "-qmin", "1",            //
-                "-q:v", "1",             //
-                "-hide_banner",          // Make quiet
-                "-loglevel", "error",    // Make quieter
-                "-y",                    // Automatically overwrites the output file if it already exists.
-                target.toString          // The output filename for the extracted frame.
+                "-i",
+                videoUri.toString, // input file or URL
+                "-frames:v",
+                "1",               // Frame quality 1 (best) to 5
+                "-qmin",
+                "1",               //
+                "-q:v",
+                "1",               //
+                "-hide_banner",    // Make quiet
+                "-loglevel",
+                "error",           // Make quieter
+                "-y",              // Automatically overwrites the output file if it already exists.
+                target.toString    // The output filename for the extracted frame.
             )
 
     private def runCommand(cmd: Seq[String]): Either[Throwable, Unit] =
@@ -136,19 +149,18 @@ object FfmpegUtil:
      *   By default ffmpeg will return "frame accutrate" capture. If you want the nearest preceding keyframe, use false
      */
     def frameCapture(
-                        videoUri: URI,
-                        elapsedTime: Duration,
-                        target: Path,
-                        accurate: Boolean = true,
-                        skipNonKeyFrames: Boolean = false
+        videoUri: URI,
+        elapsedTime: Duration,
+        target: Path,
+        accurate: Boolean = true,
+        skipNonKeyFrames: Boolean = false
     ): Either[Throwable, Path] =
         val cmd: Seq[String] = ImageType.fromPath(target) match
             case Some(ImageType.Jpeg) => buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
             case Some(ImageType.Png)  => buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
             case _                    => Seq.empty
 
-        if cmd.isEmpty then
-            Left(new IllegalArgumentException(s"Unsupported image type for target: $target"))
+        if cmd.isEmpty then Left(new IllegalArgumentException(s"Unsupported image type for target: $target"))
         else
             log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
 

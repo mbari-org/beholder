@@ -24,8 +24,6 @@ import org.mbari.beholder.etc.circe.CirceCodecs.given
 import sttp.tapir.server.ServerEndpoint
 import scala.concurrent.Future
 import org.mbari.beholder.ImageCapture
-import java.net.URL
-import java.nio.file.Files
 
 class CaptureEndpoints(imageCapture: ImageCapture, apiKey: String)(using ec: ExecutionContext) extends Endpoints:
 

@@ -17,23 +17,31 @@
 package org.mbari.beholder
 
 import io.vertx.core.Vertx
-import io.vertx.ext.web.handler.CorsHandler
+import io.vertx.core.http.HttpServerOptions
 import io.vertx.ext.web.Router
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.Callable
-import org.mbari.beholder.api.{CaptureEndpoints, SwaggerEndpoints}
-import org.mbari.beholder.api.HealthEndpoints
+import io.vertx.ext.web.handler.CorsHandler
+import org.mbari.beholder.api.{
+  CaptureEndpoints,
+  HealthEndpoints,
+  SwaggerEndpoints
+}
 import org.mbari.beholder.etc.jdk.Logging.given
 import picocli.CommandLine
 import picocli.CommandLine.{Command, Option as Opt, Parameters}
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContextExecutor
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
-import io.vertx.core.http.HttpServerOptions
+
+import java.nio.file.{
+  Files,
+  Path
+}
+import java.util.concurrent.Callable
+import scala.concurrent.duration.Duration
+import scala.concurrent.{
+  Await,
+  ExecutionContext,
+  ExecutionContextExecutor
+}
 
 @Command(
     description = Array("Start the server"),
@@ -118,7 +126,7 @@ object Main:
             log.atInfo.log(() => s"Creating cache directory: $cacheRoot")
             Files.createDirectories(cacheRoot)
 
-        val jpegCache        = JpegCache(cacheRoot, cacheSizeMb, freePct)
+        val jpegCache        = ImageCacheImpl(cacheRoot, cacheSizeMb, freePct)
         val jpegCapture      = ImageCapture(jpegCache)
         val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
         val healthEndpoints  = HealthEndpoints()

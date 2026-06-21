@@ -16,11 +16,9 @@
 
 package org.mbari.beholder
 
-import org.mbari.beholder.etc.ffmpeg.DurationString.DurationString
-
 import java.net.URI
 import java.nio.file.{Files, Path}
-import java.time.{Duration, Instant}
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
@@ -30,21 +28,24 @@ import org.mbari.beholder.util.NumberUtil
 import scala.jdk.CollectionConverters.*
 
 /**
- * Disk-backed JPEG frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups
- * and evicted oldest-first when total on-disk size exceeds `maxCacheSizeMB`.
+ * Disk-backed JPEG frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted oldest-first
+ * when total on-disk size exceeds `maxCacheSizeMB`.
  *
  * Improvements over JpegCache:
- *  - O(1) lookup via nested ConcurrentHashMap (URI → elapsedMs → Jpeg) instead of O(n) TreeSet.find
- *  - O(log n) eviction via ConcurrentSkipListSet ordered by creation time; pollFirst() is atomic
- *  - AtomicLong byte counter avoids floating-point drift from summing MB values
- *  - AtomicBoolean eviction guard prevents concurrent eviction storms without a global lock
- *  - scanCache preserves real file creation timestamps for correct age-ordering on restart
+ *   - O(1) lookup via nested ConcurrentHashMap (URI → elapsedMs → Jpeg) instead of O(n) TreeSet.find
+ *   - O(log n) eviction via ConcurrentSkipListSet ordered by creation time; pollFirst() is atomic
+ *   - AtomicLong byte counter avoids floating-point drift from summing MB values
+ *   - AtomicBoolean eviction guard prevents concurrent eviction storms without a global lock
+ *   - scanCache preserves real file creation timestamps for correct age-ordering on restart
  *
- * @param root           Root directory for cached JPEG files
- * @param maxCacheSizeMB Maximum allowed on-disk cache size in MB
- * @param cacheClearPct  Fraction of current cache size to free when the limit is exceeded (0 < x <= 1)
+ * @param root
+ *   Root directory for cached JPEG files
+ * @param maxCacheSizeMB
+ *   Maximum allowed on-disk cache size in MB
+ * @param cacheClearPct
+ *   Fraction of current cache size to free when the limit is exceeded (0 < x <= 1)
  */
-class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20) extends ImageCache:
+class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20) extends ImageCache:
 
     require(Files.isDirectory(root), "root must be a directory")
     require(Files.isWritable(root), "root must be writable")
@@ -82,17 +83,17 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
     scanCache()
 
     def currentCacheSizeMB: Double = NumberUtil.byteToMB(totalBytes.get())
-    
 
     def get(jpeg: CachedImage): Option[CachedImage] =
         Option(index.get(jpeg.videoUri))
             .flatMap(m => Option(m.get((jpeg.elapsedTime.toMillis, jpeg.imageType))))
 
     /**
-     * Store a JPEG in the cache. Stamps the creation time as now, then triggers eviction if
-     * total size exceeds the limit.
+     * Store a JPEG in the cache. Stamps the creation time as now, then triggers eviction if total size exceeds the
+     * limit.
      *
-     * @return The stored Jpeg (with updated creation time)
+     * @return
+     *   The stored Jpeg (with updated creation time)
      */
     def put(jpeg: CachedImage): CachedImage =
         val stamped = jpeg.copy(created = Instant.now())
@@ -108,7 +109,6 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         val newTotal = totalBytes.addAndGet(stamped.sizeBytes.getOrElse(0L))
         if newTotal > maxBytes then freeDisk()
         jpeg
-    
 
     def remove(jpeg: CachedImage): Option[CachedImage] =
         Option(index.get(jpeg.videoUri)).flatMap { timeMap =>
@@ -118,12 +118,10 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                 jpeg
             }
         }
-        
 
     /**
-     * Evict oldest entries until `currentSize * cacheClearPct` bytes have been freed,
-     * then delete the corresponding files from disk.
-     * pollFirst() is atomic — no separate lock needed for the dequeue step.
+     * Evict oldest entries until `currentSize * cacheClearPct` bytes have been freed, then delete the corresponding
+     * files from disk. pollFirst() is atomic — no separate lock needed for the dequeue step.
      */
     private def freeDisk(): Unit =
         if evicting.compareAndSet(false, true) then
@@ -143,12 +141,12 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                         else None
 
                 totalBytes.addAndGet(-freedBytes)
-                log.atDebug.log(() => s"Evicted ${toDelete.size} jpegs (${NumberUtil.byteToMB(freedBytes)} MB) from cache")
+                log.atDebug
+                    .log(() => s"Evicted ${toDelete.size} jpegs (${NumberUtil.byteToMB(freedBytes)} MB) from cache")
 
                 // Delete files outside the eviction loop — no lock contention here.
                 toDelete.foreach(deleteFromDisk)
-            finally
-                evicting.set(false)
+            finally evicting.set(false)
 
     private def deleteFromDisk(jpeg: CachedImage): Unit =
         if Files.exists(jpeg.path) then
@@ -158,10 +156,9 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                     log.atWarn.log(() => s"Failed to delete cached file ${jpeg.path}: ${e.getMessage}")
 
     /**
-     * Scan the cache root directory and rebuild the in-memory index from existing files.
-     * Uses each file's filesystem creation timestamp so eviction ordering reflects true file
-     * age after a restart (unlike put(), which stamps Instant.now()).
-     * Does NOT trigger eviction during the scan.
+     * Scan the cache root directory and rebuild the in-memory index from existing files. Uses each file's filesystem
+     * creation timestamp so eviction ordering reflects true file age after a restart (unlike put(), which stamps
+     * Instant.now()). Does NOT trigger eviction during the scan.
      */
     def scanCache(): Unit =
         index.clear()
