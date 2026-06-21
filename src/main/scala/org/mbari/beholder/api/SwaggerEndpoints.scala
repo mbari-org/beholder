@@ -27,10 +27,7 @@ case class SwaggerEndpoints(captureEndpoints: CaptureEndpoints, healthEndpoints:
     val allImpl: List[ServerEndpoint[Any, Future]] =
         SwaggerInterpreter()
             .fromEndpoints[Future](
-                List(
-                    captureEndpoints.captureEndpoint,
-                    healthEndpoints.defaultEndpoint
-                ),
+                captureEndpoints.all ++ healthEndpoints.all,
                 AppConfig.Name,
                 AppConfig.Version
             )

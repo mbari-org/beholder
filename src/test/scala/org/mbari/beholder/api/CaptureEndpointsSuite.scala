@@ -33,70 +33,90 @@ import sttp.tapir.server.stub.TapirStubInterpreter
 
 class CaptureEndpointsSuite extends munit.FunSuite:
 
-  given ExecutionContextExecutor = ExecutionContext.global
-  
-  // -- Set up cache
-  private val root = TestUtil.root
-  Files.createDirectories(root)
-  private val cache = ImageCacheImpl(root, 3, .3)
-  private val capture = ImageCapture(cache)
+    given ExecutionContextExecutor = ExecutionContext.global
 
-  private val videoUrl = TestUtil.bigBuckBunny
-  private val captureRequest = CaptureRequest(videoUrl.toExternalForm(), 1234L)
-  private val captureEndpoint = CaptureEndpoints(capture, AppConfig.Api.Key)
+    private val root = TestUtil.root
+    Files.createDirectories(root)
+    private val cache           = ImageCacheImpl(root, 3, .3)
+    private val capture         = ImageCapture(cache)
+    private val videoUrl        = TestUtil.bigBuckBunny
+    private val captureEndpoint = CaptureEndpoints(capture, AppConfig.Api.Key)
 
-  val backendStub: SttpBackend[Future, Any] = TapirStubInterpreter(SttpBackendStub.asynchronousFuture)
-    .whenServerEndpoint(captureEndpoint.captureImpl)
-    .thenRunLogic()
-    .backend()
+    private def stub(impl: sttp.tapir.server.ServerEndpoint[Any, Future]): SttpBackend[Future, Any] =
+        TapirStubInterpreter(SttpBackendStub.asynchronousFuture)
+            .whenServerEndpoint(impl)
+            .thenRunLogic()
+            .backend()
 
-  test("/capture"):
-    
-    val response = basicRequest
-      .post(uri"http://test.com/capture")
-      .header("X-Api-Key", AppConfig.Api.Key)
-      .body(captureRequest.stringify)
-      .send(backendStub)
+    private val captureStub    = stub(captureEndpoint.captureImpl)
+    private val captureJpgStub = stub(captureEndpoint.captureJpgImpl)
+    private val capturePngStub = stub(captureEndpoint.capturePngImpl)
 
-    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
-    assertEquals(result.code.code, 200)
-    
+    private def await(f: Future[Response[Either[String, String]]]) =
+        Await.result(f, Duration(10, TimeUnit.SECONDS))
 
-  test("/capture with invalid X-Api-Key"):
-    val response = basicRequest
-      .post(uri"http://test.com/capture")
-      .header("X-Api-Key", "bad key")
-      .body(captureRequest.stringify)
-      .send(backendStub)
+    // ---- /capture ----
 
-    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
-    assertEquals(result.code.code, 401)
+    test("/capture"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 200)
 
-  test("/capture?accurate=false"):
+    test("/capture with invalid X-Api-Key"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture").header("X-Api-Key", "bad key").body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 401)
 
-    val captureRequest1 = CaptureRequest(videoUrl.toExternalForm(), 2345)
-    
-    val response = basicRequest
-      .post(uri"http://test.com/capture?accurate=false")
-      .header("X-Api-Key", AppConfig.Api.Key)
-      .body(captureRequest1.stringify)
-      .send(backendStub)
+    test("/capture?accurate=false"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture?accurate=false").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 200)
 
-    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
-    assertEquals(result.code.code, 200)
+    test("/capture?nokey=true"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture?nokey=true").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 200)
 
-  
-  test("/capture?nokey=true"):
+    // ---- /capture/jpg ----
 
-    val captureRequest1 = CaptureRequest(videoUrl.toExternalForm(), 2345)
-    
-    val response = basicRequest
-      .post(uri"http://test.com/capture?nokey=true")
-      .header("X-Api-Key", AppConfig.Api.Key)
-      .body(captureRequest1.stringify)
-      .send(backendStub)
+    test("/capture/jpg"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/jpg").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureJpgStub))
+        assertEquals(result.code.code, 200)
 
-    val result = Await.result(response, Duration(10, TimeUnit.SECONDS))
-    assertEquals(result.code.code, 200)
-  
-  
+    test("/capture/jpg with invalid X-Api-Key"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/jpg").header("X-Api-Key", "bad key").body(req.stringify).send(captureJpgStub))
+        assertEquals(result.code.code, 401)
+
+    test("/capture/jpg?accurate=false"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/jpg?accurate=false").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureJpgStub))
+        assertEquals(result.code.code, 200)
+
+    test("/capture/jpg?nokey=true"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/jpg?nokey=true").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureJpgStub))
+        assertEquals(result.code.code, 200)
+
+    // ---- /capture/png ----
+
+    test("/capture/png"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/png").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(capturePngStub))
+        assertEquals(result.code.code, 200)
+
+    test("/capture/png with invalid X-Api-Key"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 1234L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/png").header("X-Api-Key", "bad key").body(req.stringify).send(capturePngStub))
+        assertEquals(result.code.code, 401)
+
+    test("/capture/png?accurate=false"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/png?accurate=false").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(capturePngStub))
+        assertEquals(result.code.code, 200)
+
+    test("/capture/png?nokey=true"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
+        val result = await(basicRequest.post(uri"http://test.com/capture/png?nokey=true").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(capturePngStub))
+        assertEquals(result.code.code, 200)

@@ -53,7 +53,7 @@ class ImageCapture(cache: ImageCache):
      * @param imageType
      *   The type of image to capture.
      * @return
-     *   On success, a Right containing the information and location on disk of the captured Jpeg. On failure, a Left
+     *   On success, a Right containing the information and location on disk of the captured image. On failure, a Left
      *   containing an ErrorMsg.
      */
     def capture(
