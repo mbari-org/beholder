@@ -55,7 +55,7 @@ lazy val root = project
     // Set version based on git tag. I use "0.0.0" format (no leading "v", which is the default)
     // Use `show gitCurrentTags` in sbt to update/see the tags
     git.gitTagToVersionNumber := { (gitTag: String) =>
-      if(gitTag matches "[0-9]+\\..*") Some(gitTag)
+      if (gitTag.matches("[0-9]+\\..*")) Some(gitTag)
       else None
     },
     git.useGitDescribe := true,
