@@ -54,8 +54,8 @@ lazy val root = project
     dockerUpdateLatest := true,
     // Set version based on git tag. I use "0.0.0" format (no leading "v", which is the default)
     // Use `show gitCurrentTags` in sbt to update/see the tags
-    git.gitTagToVersionNumber := { tag: String =>
-      if(tag matches "[0-9]+\\..*") Some(tag)
+    git.gitTagToVersionNumber := { (gitTag: String) =>
+      if(gitTag matches "[0-9]+\\..*") Some(gitTag)
       else None
     },
     git.useGitDescribe := true,

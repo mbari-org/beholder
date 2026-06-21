@@ -110,7 +110,7 @@ object Main:
         val interpreter       = VertxFutureServerInterpreter()
 
         // Add CORS
-        val corsHandler = CorsHandler.create("*")
+        val corsHandler = CorsHandler.create()
         router.route().handler(corsHandler)
 
         // create cache if needed
