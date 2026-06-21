@@ -18,21 +18,22 @@ package org.mbari.beholder
 
 import java.net.URL
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
+import scala.util.Using
 
 object TestUtil:
 
-  val bigBuckBunny: URL =
-    val url = getClass.getResource("/Big_Buck_Bunny_1080_10s_1MB.mp4")
-    // sbt 2 packs test resources into a JAR, giving a jar: URL that ffmpeg can't read.
-    // Extract to a temp file so callers always get a file: URL.
-    if url.getProtocol == "jar" then
-      val tmp = Files.createTempFile("beholder_test_", ".mp4")
-      tmp.toFile.deleteOnExit()
-      val in = url.openStream()
-      Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
-      in.close()
-      tmp.toUri.toURL
-    else
-      url
+    val bigBuckBunny: URL =
+        val url = getClass.getResource("/Big_Buck_Bunny_1080_10s_1MB.mp4")
+        // sbt 2 packs test resources into a JAR, giving a jar: URL that ffmpeg can't read.
+        // Extract to a temp file so callers always get a file: URL.
+        if url.getProtocol == "jar" then
+            val tmp = Files.createTempFile("beholder_test_", ".mp4")
+            tmp.toFile.deleteOnExit()
+            Using(url.openStream()) { in =>
+                Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
+            }.getOrElse:
+                throw new RuntimeException(s"Failed to extract test video from ${url.toString}")
+            tmp.toUri.toURL
+        else url
 
-  val root: Path = Paths.get("target", "test_cache")
+    val root: Path = Paths.get("target", "test_cache")
