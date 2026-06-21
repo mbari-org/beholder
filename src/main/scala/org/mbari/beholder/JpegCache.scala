@@ -55,8 +55,8 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
 
     private val log = System.getLogger(getClass.getName)
 
-    // Two-level lookup: URI → (elapsedTimeMillis → Jpeg). O(1) average per level.
-    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[Long, CachedImage]] =
+    // Two-level lookup: URI → ((elapsedTimeMillis, ImageType) → CachedImage). O(1) average per level.
+    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType), CachedImage]] =
         new ConcurrentHashMap()
 
     // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs).
@@ -84,10 +84,9 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
     def currentCacheSizeMB: Double = NumberUtil.byteToMB(totalBytes.get())
     
 
-    def get(jpeg: CachedImage): Option[CachedImage] = //get(jpeg.videoUri, jpeg.elapsedTime)
-        val uri = jpeg.videoUri
-        val elapsedTime = jpeg.elapsedTime
-        Option(index.get(uri)).flatMap(m => Option(m.get(elapsedTime.toMillis)))
+    def get(jpeg: CachedImage): Option[CachedImage] =
+        Option(index.get(jpeg.videoUri))
+            .flatMap(m => Option(m.get((jpeg.elapsedTime.toMillis, jpeg.imageType))))
 
     /**
      * Store a JPEG in the cache. Stamps the creation time as now, then triggers eviction if
@@ -99,8 +98,8 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         val stamped = jpeg.copy(created = Instant.now())
         val timeMap = index.computeIfAbsent(stamped.videoUri, _ => new ConcurrentHashMap())
 
-        // If this (uri, elapsedTime) already exists, withdraw the old entry's accounting.
-        val old = timeMap.put(stamped.elapsedTime.toMillis, stamped)
+        // If this (uri, elapsedTime, imageType) already exists, withdraw the old entry's accounting.
+        val old = timeMap.put((stamped.elapsedTime.toMillis, stamped.imageType), stamped)
         if old != null then
             evictionQueue.remove(old)
             totalBytes.addAndGet(-old.sizeBytes.getOrElse(0L))
@@ -111,11 +110,9 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
         jpeg
     
 
-    def remove(jpeg: CachedImage): Option[CachedImage] = //emove(jpeg.videoUri, jpeg.elapsedTime)
-        val uri = jpeg.videoUri
-        val elapsedTime = jpeg.elapsedTime
-        Option(index.get(uri)).flatMap { timeMap =>
-            Option(timeMap.remove(elapsedTime.toMillis)).map { jpeg =>
+    def remove(jpeg: CachedImage): Option[CachedImage] =
+        Option(index.get(jpeg.videoUri)).flatMap { timeMap =>
+            Option(timeMap.remove((jpeg.elapsedTime.toMillis, jpeg.imageType))).map { jpeg =>
                 evictionQueue.remove(jpeg)
                 totalBytes.addAndGet(-jpeg.sizeBytes.getOrElse(0L))
                 jpeg
@@ -138,7 +135,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                 var jpeg = Option(evictionQueue.pollFirst())
                 while jpeg.isDefined && freedBytes < targetFreeBytes do
                     val j = jpeg.get
-                    Option(index.get(j.videoUri)).foreach(_.remove(j.elapsedTime.toMillis))
+                    Option(index.get(j.videoUri)).foreach(_.remove((j.elapsedTime.toMillis, j.imageType)))
                     freedBytes += j.sizeBytes.getOrElse(0L)
                     toDelete += j
                     jpeg =
@@ -179,7 +176,7 @@ class JpegCache(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 
                 CachedImage.fromPath(root, file).foreach { jpeg =>
                     val timed   = jpeg.copy(created = attrs.creationTime().toInstant)
                     val timeMap = index.computeIfAbsent(timed.videoUri, _ => new ConcurrentHashMap())
-                    timeMap.put(timed.elapsedTime.toMillis, timed)
+                    timeMap.put((timed.elapsedTime.toMillis, timed.imageType), timed)
                     evictionQueue.add(timed)
                     totalBytes.addAndGet(timed.sizeBytes.getOrElse(0L))
                 }
