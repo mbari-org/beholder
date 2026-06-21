@@ -50,6 +50,8 @@ class ImageCapture(cache: ImageCache):
      * @param skipNonKeyFrames
      *   If true, the capture will skip non-key frames. This is useful for videos that do not have keyframes at regular
      *   intervals.
+     * @param imageType
+     *   The type of image to capture.
      * @return
      *   On success, a Right containing the information and location on disk of the captured Jpeg. On failure, a Left
      *   containing an ErrorMsg.
@@ -58,23 +60,25 @@ class ImageCapture(cache: ImageCache):
         videoUri: URI,
         elapsedTime: Duration,
         accurate: Boolean = true,
-        skipNonKeyFrames: Boolean = false
+        skipNonKeyFrames: Boolean = false,
+        imageType: ImageType = ImageType.Jpeg
     ): Either[ErrorMsg, CachedImage] =
-        cache.get(videoUri, elapsedTime, ImageType.Jpeg) match
-            case Some(jpeg) => Right(jpeg)
-            case None       => grabFrame(videoUri, elapsedTime, accurate, skipNonKeyFrames)
+        cache.get(videoUri, elapsedTime, imageType) match
+            case Some(cachedImage) => Right(cachedImage)
+            case None              => grabFrame(videoUri, elapsedTime, accurate, skipNonKeyFrames, imageType)
 
     private def grabFrame(
         videoUri: URI,
         elapsedTime: Duration,
         accurate: Boolean,
-        skipNonKeyFrames: Boolean
+        skipNonKeyFrames: Boolean,
+        imageType: ImageType = ImageType.Jpeg
     ): Either[ErrorMsg, CachedImage] =
-        val jpeg = CachedImage.toPath(cache.root, videoUri, elapsedTime, imageType = ImageType.Jpeg)
-        if PathUtil.isChild(cache.root, jpeg.path) then
-            val parent = jpeg.path.getParent()
+        val cachedImage = CachedImage.toPath(cache.root, videoUri, elapsedTime, imageType = imageType)
+        if PathUtil.isChild(cache.root, cachedImage.path) then
+            val parent = cachedImage.path.getParent()
             if !Files.exists(parent) then Files.createDirectories(parent)
-            FfmpegUtil.frameCapture(videoUri, elapsedTime, jpeg.path, accurate, skipNonKeyFrames) match
+            FfmpegUtil.frameCapture(videoUri, elapsedTime, cachedImage.path, accurate, skipNonKeyFrames) match
                 case Left(e)     =>
                     log
                         .withCause(e)
@@ -84,10 +88,10 @@ class ImageCapture(cache: ImageCache):
                 case Right(path) =>
                     Try:
                         val sizeBytes = Files.size(path)
-                        val theJpeg   = jpeg.copy(path = path, sizeBytes = Some(sizeBytes))
-                        cache.put(theJpeg)
-                        log.atDebug.log(() => s"Captured image at ${DurationUtil.toHMS(elapsedTime)} from $videoUri")
-                        theJpeg
+                        val theImage   = cachedImage.copy(path = path, sizeBytes = Some(sizeBytes))
+                        cache.put(theImage)
+                        log.atDebug.log(() => s"Captured image (${imageType.mediaType} at ${DurationUtil.toHMS(elapsedTime)} from $videoUri")
+                        theImage
                     match
                         case Failure(exception) =>
                             log
