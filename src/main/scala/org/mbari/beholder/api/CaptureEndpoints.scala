@@ -88,7 +88,7 @@ class CaptureEndpoints(imageCapture: ImageCapture, apiKey: String)(using ec: Exe
             .name("capture")
             .description(
                 "Capture a frame from a video at a given elapsed time or pull it from the cache if it exists. " +
-                    "Include imageType (jpg or png) in the request body to select the format; defaults to JPEG."
+                    "Include imageType (either jpg or png) in the request body to select the format; defaults to \"jpg\"."
             )
             .summary("Frame capture from a video")
             .tag("capture")
