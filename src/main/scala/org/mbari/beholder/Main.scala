@@ -118,7 +118,13 @@ object Main:
         val interpreter       = VertxFutureServerInterpreter()
 
         // Add CORS
-        val corsHandler = CorsHandler.create("*")
+        val corsHandler = CorsHandler.create()
+            .allowedMethod(io.vertx.core.http.HttpMethod.GET)
+            .allowedMethod(io.vertx.core.http.HttpMethod.POST)
+            .allowedHeader("X-Requested-With")
+            .allowedHeader("Content-Type")
+            .allowedHeader("Accept")
+            .allowedHeader("X-Api-Key")
         router.route().handler(corsHandler)
 
         // create cache if needed
