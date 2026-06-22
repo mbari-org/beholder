@@ -8,7 +8,7 @@
 
 ## Overview
 
-Beholder is a Scala 3 HTTP microservice that extracts individual frames from videos as JPEGs using `ffmpeg`. It exposes a single `POST /capture` endpoint that accepts a video URL and an elapsed time in milliseconds, returns the JPEG image, and caches results on disk to avoid redundant ffmpeg invocations.
+Beholder is a Scala 3 HTTP microservice that extracts individual frames from videos as JPEG or PNG images using `ffmpeg`. It exposes `POST /capture` endpoints that accept a video URL and an elapsed time in milliseconds, return the image, and cache results on disk to avoid redundant ffmpeg invocations.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Beholder is a Scala 3 HTTP microservice that extracts individual frames from vid
 
 ### POST /capture
 
-Capture a frame from a video at the given elapsed time. Returns the JPEG image directly, or a cached copy if one exists.
+Capture a frame from a video at the given elapsed time. Returns the image directly (JPEG by default), or a cached copy if one exists. Use the optional `imageType` field to request a PNG instead.
 
 **Headers**
 
@@ -38,14 +38,24 @@ Capture a frame from a video at the given elapsed time. Returns the JPEG image d
 
 **Request Body**
 
+| Field | Required | Description |
+|---|---|---|
+| `videoUrl` | Yes | URL of the video file |
+| `elapsedTimeMillis` | Yes | Elapsed time in milliseconds |
+| `imageType` | No | `"jpg"` or `"png"` (default: `"jpg"`) |
+
 ```json
 {
   "videoUrl": "http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1436/D1436_20220322T132758Z_h264.mp4",
-  "elapsedTimeMillis": 1234
+  "elapsedTimeMillis": 1234,
+  "imageType": "png"
 }
 ```
 
-**Example**
+> [!IMPORTANT]
+> PNGs are considerably larger than JPEGs and will increase latency as well as reduce the number of images that can be stored in cache.
+
+**Example — JPEG (default)**
 
 ```bash
 curl -X POST http://localhost:8080/capture \
@@ -53,6 +63,16 @@ curl -X POST http://localhost:8080/capture \
   -H "Content-Type: application/json" \
   -d '{"videoUrl":"http://example.com/video.mp4","elapsedTimeMillis":1234}' \
   --output frame.jpg
+```
+
+**Example — PNG**
+
+```bash
+curl -X POST http://localhost:8080/capture \
+  -H "X-Api-Key: foo" \
+  -H "Content-Type: application/json" \
+  -d '{"videoUrl":"http://example.com/video.mp4","elapsedTimeMillis":1234,"imageType":"png"}' \
+  --output frame.png
 ```
 
 **Example with query params**
@@ -63,6 +83,30 @@ curl -X POST "http://localhost:8080/capture?accurate=false&nokey=true" \
   -H "Content-Type: application/json" \
   -d '{"videoUrl":"http://example.com/video.mp4","elapsedTimeMillis":5000}' \
   --output frame.jpg
+```
+
+### POST /capture/jpg
+
+Convenience endpoint that always returns a JPEG, ignoring any `imageType` in the request body. Accepts the same headers, query parameters, and body fields as `POST /capture`.
+
+```bash
+curl -X POST http://localhost:8080/capture/jpg \
+  -H "X-Api-Key: foo" \
+  -H "Content-Type: application/json" \
+  -d '{"videoUrl":"http://example.com/video.mp4","elapsedTimeMillis":1234}' \
+  --output frame.jpg
+```
+
+### POST /capture/png
+
+Convenience endpoint that always returns a PNG, ignoring any `imageType` in the request body. Accepts the same headers, query parameters, and body fields as `POST /capture`.
+
+```bash
+curl -X POST http://localhost:8080/capture/png \
+  -H "X-Api-Key: foo" \
+  -H "Content-Type: application/json" \
+  -d '{"videoUrl":"http://example.com/video.mp4","elapsedTimeMillis":1234}' \
+  --output frame.png
 ```
 
 ### GET /health
@@ -125,16 +169,17 @@ sbt "run --port 9090 --apikey secret /tmp/beholder-cache"
 Frames are stored under the cache root as:
 
 ```
-<root>/<video-url-host>/<video-url-path>/<hh_mm_ss.sss>.jpg
+<root>/<video-url-host>/<video-url-path>/<hh_mm_ss.sss>.<ext>
 ```
 
-For example:
+where `<ext>` is `jpg` or `png` depending on the requested image type. For example:
 
 ```
 /tmp/beholder-cache/m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1436/D1436_20220322T132758Z_h264.mp4/00_00_01.234.jpg
+/tmp/beholder-cache/m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1436/D1436_20220322T132758Z_h264.mp4/00_00_01.234.png
 ```
 
-The in-memory index is rebuilt from disk on startup, so cached frames survive service restarts.
+JPEG and PNG versions of the same frame are cached independently. The in-memory index is rebuilt from disk on startup, so cached frames survive service restarts.
 
 ## Deployment
 
