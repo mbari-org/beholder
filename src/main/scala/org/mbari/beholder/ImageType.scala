@@ -20,9 +20,15 @@ import org.mbari.beholder.etc.jdk.PathUtil
 
 import java.nio.file.Path
 
-enum ImageType(val extension: String, val mediaType: String):
-    case Jpeg extends ImageType(".jpg", "image/jpeg")
-    case Png  extends ImageType(".png", "image/png")
+/**
+ * The image type. Used to determine the image type of a cached image.
+ * @param extension The extension for the image type (e.g. ".jpg", ".png")
+ * @param mediaType The media type (e.g. "image/jpeg", "image/png")
+ * @param evictionOrder The order in which the image type is evicted from the cache. Lower values are evicted first.
+ */
+enum ImageType(val extension: String, val mediaType: String, val evictionOrder: Int):
+    case Jpeg extends ImageType(".jpg", "image/jpeg", 2)
+    case Png  extends ImageType(".png", "image/png", 1)
 
 object ImageType:
     def fromExtension(ext: String): Option[ImageType] =

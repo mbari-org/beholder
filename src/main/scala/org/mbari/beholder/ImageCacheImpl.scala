@@ -60,7 +60,7 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
     private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType), CachedImage]] =
         new ConcurrentHashMap()
 
-    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs).
+    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs, imageType).
     // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element.
     private val evictionOrdering: java.util.Comparator[CachedImage] = (a: CachedImage, b: CachedImage) =>
         val byTime = a.created.compareTo(b.created)
@@ -68,7 +68,10 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
         else
             val byUri = a.videoUri.toString.compareTo(b.videoUri.toString)
             if byUri != 0 then byUri
-            else java.lang.Long.compare(a.elapsedTime.toMillis, b.elapsedTime.toMillis)
+            else
+                val byElapsedTIme = java.lang.Long.compare(a.elapsedTime.toMillis, b.elapsedTime.toMillis)
+                if byElapsedTIme != 0 then byElapsedTIme
+                else a.imageType.evictionOrder.compareTo(b.imageType.evictionOrder)
 
     private val evictionQueue: ConcurrentSkipListSet[CachedImage] =
         new ConcurrentSkipListSet[CachedImage](evictionOrdering)
