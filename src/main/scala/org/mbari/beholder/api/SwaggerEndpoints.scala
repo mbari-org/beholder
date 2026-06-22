@@ -16,20 +16,18 @@
 
 package org.mbari.beholder.api
 
-import sttp.tapir.server.ServerEndpoint
-import scala.concurrent.Future
-import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import org.mbari.beholder.AppConfig
+import sttp.tapir.server.ServerEndpoint
+import sttp.tapir.swagger.bundle.SwaggerInterpreter
+
+import scala.concurrent.Future
 
 case class SwaggerEndpoints(captureEndpoints: CaptureEndpoints, healthEndpoints: HealthEndpoints):
 
     val allImpl: List[ServerEndpoint[Any, Future]] =
         SwaggerInterpreter()
             .fromEndpoints[Future](
-                List(
-                    captureEndpoints.captureEndpoint,
-                    healthEndpoints.defaultEndpoint
-                ),
+                captureEndpoints.all ++ healthEndpoints.all,
                 AppConfig.Name,
                 AppConfig.Version
             )

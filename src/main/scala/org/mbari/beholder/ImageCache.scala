@@ -32,32 +32,32 @@ trait ImageCache:
      * @return
      *   The jpeg in the cache
      */
-    def get(jpeg: Jpeg): Option[Jpeg]
+    def get(cachedImage: CachedImage): Option[CachedImage]
 
     /**
      * Store a jpeg in the cache
      *
      * @param jpeg
-     * The jpeg to store
+     *   The jpeg to store
      * @return
-     * The stored jpeg
+     *   The stored jpeg
      */
-    def put(jpeg: Jpeg): Jpeg
+    def put(cachedImage: CachedImage): CachedImage
 
     /**
      * Remove a jpeg from the cache.
      *
      * @param jpeg
-     * the jpeg to remove
+     *   the jpeg to remove
      */
-    def remove(jpeg: Jpeg): Option[Jpeg]
+    def remove(cachedImage: CachedImage): Option[CachedImage]
 
     // -------------------------------
 
-    def get(uri: URI, elapsedTime: DurationString): Option[Jpeg] =
+    def get(uri: URI, elapsedTime: DurationString, imageType: ImageType): Option[CachedImage] =
         DurationString.unapply(elapsedTime) match
-            case None        => None
-            case Some(dur)  => get(uri, dur)
+            case None      => None
+            case Some(dur) => get(uri, dur, imageType)
 
     /**
      * @param uri
@@ -65,29 +65,26 @@ trait ImageCache:
      * @param elapsedTime
      *   The elapsed time into the video
      */
-    def get(uri: URI, elapsedTime: Duration): Option[Jpeg] =
-        get(Jpeg.fake(uri, elapsedTime))
-
+    def get(uri: URI, elapsedTime: Duration, imageType: ImageType): Option[CachedImage] =
+        get(CachedImage.fake(uri, elapsedTime, imageType))
 
     /**
-     * Store a jpeg in the cache
+     * Store a cachedImage in the cache
      *
      * @param uri
-     * The video URL
+     *   The video URL
      * @param elapsedTime
-     * The elasped time into the video
+     *   The elasped time into the video
      * @param path
-     * The on disk location of the jpeg. It must be under the cache's root directory
+     *   The on disk location of the jpeg. It must be under the cache's root directory
      */
-    def put(uri: URI, elapsedTime: Duration, path: Path): Option[Jpeg] =
-        Jpeg.fromPath(root, path).map(put)
+    def put(uri: URI, elapsedTime: Duration, path: Path): Option[CachedImage] =
+        CachedImage.fromPath(root, path).map(put)
 
-    def put(uri: URI, elapsedTime: DurationString, path: Path): Option[Jpeg] =
+    def put(uri: URI, elapsedTime: DurationString, path: Path): Option[CachedImage] =
         DurationString.unapply(elapsedTime) match
-            case None => None
+            case None      => None
             case Some(dur) => put(uri, dur, path)
 
-    def remove(uri: URI, elapsedTime: Duration): Option[Jpeg] =
-        remove(Jpeg.fake(uri, elapsedTime))
-
-
+    def remove(uri: URI, elapsedTime: Duration, imageType: ImageType): Option[CachedImage] =
+        remove(CachedImage.fake(uri, elapsedTime, imageType))

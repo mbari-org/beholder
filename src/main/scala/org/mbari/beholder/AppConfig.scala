@@ -17,6 +17,7 @@
 package org.mbari.beholder
 
 import com.typesafe.config.ConfigFactory
+
 import scala.util.Try
 
 object AppConfig:

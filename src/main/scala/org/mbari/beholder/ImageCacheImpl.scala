@@ -16,11 +16,9 @@
 
 package org.mbari.beholder
 
-import org.mbari.beholder.etc.ffmpeg.DurationString.DurationString
-
 import java.net.URI
 import java.nio.file.{Files, Path}
-import java.time.{Duration, Instant}
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
@@ -30,21 +28,24 @@ import org.mbari.beholder.util.NumberUtil
 import scala.jdk.CollectionConverters.*
 
 /**
- * Disk-backed JPEG frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups
- * and evicted oldest-first when total on-disk size exceeds `maxCacheSizeMB`.
+ * Disk-backed image frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted oldest-first
+ * when total on-disk size exceeds `maxCacheSizeMB`.
  *
  * Improvements over JpegCache:
- *  - O(1) lookup via nested ConcurrentHashMap (URI → elapsedMs → Jpeg) instead of O(n) TreeSet.find
- *  - O(log n) eviction via ConcurrentSkipListSet ordered by creation time; pollFirst() is atomic
- *  - AtomicLong byte counter avoids floating-point drift from summing MB values
- *  - AtomicBoolean eviction guard prevents concurrent eviction storms without a global lock
- *  - scanCache preserves real file creation timestamps for correct age-ordering on restart
+ *   - O(1) lookup via nested ConcurrentHashMap (URI → elapsedMs → Jpeg) instead of O(n) TreeSet.find
+ *   - O(log n) eviction via ConcurrentSkipListSet ordered by creation time; pollFirst() is atomic
+ *   - AtomicLong byte counter avoids floating-point drift from summing MB values
+ *   - AtomicBoolean eviction guard prevents concurrent eviction storms without a global lock
+ *   - scanCache preserves real file creation timestamps for correct age-ordering on restart
  *
- * @param root           Root directory for cached JPEG files
- * @param maxCacheSizeMB Maximum allowed on-disk cache size in MB
- * @param cacheClearPct  Fraction of current cache size to free when the limit is exceeded (0 < x <= 1)
+ * @param root
+ *   Root directory for cached JPEG files
+ * @param maxCacheSizeMB
+ *   Maximum allowed on-disk cache size in MB
+ * @param cacheClearPct
+ *   Fraction of current cache size to free when the limit is exceeded (0 < x <= 1)
  */
-class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20) extends ImageCache:
+class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double = 0.20) extends ImageCache:
 
     require(Files.isDirectory(root), "root must be a directory")
     require(Files.isWritable(root), "root must be writable")
@@ -55,22 +56,25 @@ class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double =
 
     private val log = System.getLogger(getClass.getName)
 
-    // Two-level lookup: URI → (elapsedTimeMillis → Jpeg). O(1) average per level.
-    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[Long, Jpeg]] =
+    // Two-level lookup: URI → ((elapsedTimeMillis, ImageType) → CachedImage). O(1) average per level.
+    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType), CachedImage]] =
         new ConcurrentHashMap()
 
-    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs).
+    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs, imageType).
     // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element.
-    private val evictionOrdering: java.util.Comparator[Jpeg] = (a: Jpeg, b: Jpeg) =>
+    private val evictionOrdering: java.util.Comparator[CachedImage] = (a: CachedImage, b: CachedImage) =>
         val byTime = a.created.compareTo(b.created)
         if byTime != 0 then byTime
         else
             val byUri = a.videoUri.toString.compareTo(b.videoUri.toString)
             if byUri != 0 then byUri
-            else java.lang.Long.compare(a.elapsedTime.toMillis, b.elapsedTime.toMillis)
+            else
+                val byElapsedTIme = java.lang.Long.compare(a.elapsedTime.toMillis, b.elapsedTime.toMillis)
+                if byElapsedTIme != 0 then byElapsedTIme
+                else a.imageType.evictionOrder.compareTo(b.imageType.evictionOrder)
 
-    private val evictionQueue: ConcurrentSkipListSet[Jpeg] =
-        new ConcurrentSkipListSet[Jpeg](evictionOrdering)
+    private val evictionQueue: ConcurrentSkipListSet[CachedImage] =
+        new ConcurrentSkipListSet[CachedImage](evictionOrdering)
 
     // Track total cache size in bytes (integer arithmetic — no floating-point drift).
     private val totalBytes: AtomicLong = new AtomicLong(0L)
@@ -82,25 +86,24 @@ class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double =
     scanCache()
 
     def currentCacheSizeMB: Double = NumberUtil.byteToMB(totalBytes.get())
-    
 
-    def get(jpeg: Jpeg): Option[Jpeg] = //get(jpeg.videoUri, jpeg.elapsedTime)
-        val uri = jpeg.videoUri
-        val elapsedTime = jpeg.elapsedTime
-        Option(index.get(uri)).flatMap(m => Option(m.get(elapsedTime.toMillis)))
+    def get(jpeg: CachedImage): Option[CachedImage] =
+        Option(index.get(jpeg.videoUri))
+            .flatMap(m => Option(m.get((jpeg.elapsedTime.toMillis, jpeg.imageType))))
 
     /**
-     * Store a JPEG in the cache. Stamps the creation time as now, then triggers eviction if
-     * total size exceeds the limit.
+     * Store a image in the cache. Stamps the creation time as now, then triggers eviction if total size exceeds the
+     * limit.
      *
-     * @return The stored Jpeg (with updated creation time)
+     * @return
+     *   The stored Jpeg (with updated creation time)
      */
-    def put(jpeg: Jpeg): Jpeg =
-        val stamped = jpeg.copy(created = Instant.now())
+    def put(cachedImage: CachedImage): CachedImage =
+        val stamped = cachedImage.copy(created = Instant.now())
         val timeMap = index.computeIfAbsent(stamped.videoUri, _ => new ConcurrentHashMap())
 
-        // If this (uri, elapsedTime) already exists, withdraw the old entry's accounting.
-        val old = timeMap.put(stamped.elapsedTime.toMillis, stamped)
+        // If this (uri, elapsedTime, imageType) already exists, withdraw the old entry's accounting.
+        val old = timeMap.put((stamped.elapsedTime.toMillis, stamped.imageType), stamped)
         if old != null then
             evictionQueue.remove(old)
             totalBytes.addAndGet(-old.sizeBytes.getOrElse(0L))
@@ -108,52 +111,47 @@ class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double =
         evictionQueue.add(stamped)
         val newTotal = totalBytes.addAndGet(stamped.sizeBytes.getOrElse(0L))
         if newTotal > maxBytes then freeDisk()
-        jpeg
-    
+        stamped
 
-    def remove(jpeg: Jpeg): Option[Jpeg] = //emove(jpeg.videoUri, jpeg.elapsedTime)
-        val uri = jpeg.videoUri
-        val elapsedTime = jpeg.elapsedTime
-        Option(index.get(uri)).flatMap { timeMap =>
-            Option(timeMap.remove(elapsedTime.toMillis)).map { jpeg =>
-                evictionQueue.remove(jpeg)
-                totalBytes.addAndGet(-jpeg.sizeBytes.getOrElse(0L))
-                jpeg
+    def remove(cachedImage: CachedImage): Option[CachedImage] =
+        Option(index.get(cachedImage.videoUri)).flatMap { timeMap =>
+            Option(timeMap.remove((cachedImage.elapsedTime.toMillis, cachedImage.imageType))).map { img =>
+                evictionQueue.remove(img)
+                totalBytes.addAndGet(-img.sizeBytes.getOrElse(0L))
+                img
             }
         }
-        
 
     /**
-     * Evict oldest entries until `currentSize * cacheClearPct` bytes have been freed,
-     * then delete the corresponding files from disk.
-     * pollFirst() is atomic — no separate lock needed for the dequeue step.
+     * Evict oldest entries until `currentSize * cacheClearPct` bytes have been freed, then delete the corresponding
+     * files from disk. pollFirst() is atomic — no separate lock needed for the dequeue step.
      */
     private def freeDisk(): Unit =
         if evicting.compareAndSet(false, true) then
             try
                 val targetFreeBytes = (totalBytes.get() * cacheClearPct).toLong
                 var freedBytes      = 0L
-                val toDelete        = collection.mutable.ArrayBuffer.empty[Jpeg]
+                val toDelete        = collection.mutable.ArrayBuffer.empty[CachedImage]
 
-                var jpeg = Option(evictionQueue.pollFirst())
-                while jpeg.isDefined && freedBytes < targetFreeBytes do
-                    val j = jpeg.get
-                    Option(index.get(j.videoUri)).foreach(_.remove(j.elapsedTime.toMillis))
+                var cachedImage = Option(evictionQueue.pollFirst())
+                while cachedImage.isDefined && freedBytes < targetFreeBytes do
+                    val j = cachedImage.get
+                    Option(index.get(j.videoUri)).foreach(_.remove((j.elapsedTime.toMillis, j.imageType)))
                     freedBytes += j.sizeBytes.getOrElse(0L)
                     toDelete += j
-                    jpeg =
+                    cachedImage =
                         if freedBytes < targetFreeBytes then Option(evictionQueue.pollFirst())
                         else None
 
                 totalBytes.addAndGet(-freedBytes)
-                log.atDebug.log(() => s"Evicted ${toDelete.size} jpegs (${NumberUtil.byteToMB(freedBytes)} MB) from cache")
+                log.atDebug
+                    .log(() => s"Evicted ${toDelete.size} jpegs (${NumberUtil.byteToMB(freedBytes)} MB) from cache")
 
                 // Delete files outside the eviction loop — no lock contention here.
                 toDelete.foreach(deleteFromDisk)
-            finally
-                evicting.set(false)
+            finally evicting.set(false)
 
-    private def deleteFromDisk(jpeg: Jpeg): Unit =
+    private def deleteFromDisk(jpeg: CachedImage): Unit =
         if Files.exists(jpeg.path) then
             try Files.delete(jpeg.path)
             catch
@@ -161,10 +159,9 @@ class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double =
                     log.atWarn.log(() => s"Failed to delete cached file ${jpeg.path}: ${e.getMessage}")
 
     /**
-     * Scan the cache root directory and rebuild the in-memory index from existing files.
-     * Uses each file's filesystem creation timestamp so eviction ordering reflects true file
-     * age after a restart (unlike put(), which stamps Instant.now()).
-     * Does NOT trigger eviction during the scan.
+     * Scan the cache root directory and rebuild the in-memory index from existing files. Uses each file's filesystem
+     * creation timestamp so eviction ordering reflects true file age after a restart (unlike put(), which stamps
+     * Instant.now()). Does NOT trigger eviction during the scan.
      */
     def scanCache(): Unit =
         index.clear()
@@ -176,10 +173,10 @@ class JpegCache2(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Double =
                 file: Path,
                 attrs: java.nio.file.attribute.BasicFileAttributes
             ): java.nio.file.FileVisitResult =
-                Jpeg.fromPath(root, file).foreach { jpeg =>
+                CachedImage.fromPath(root, file).foreach { jpeg =>
                     val timed   = jpeg.copy(created = attrs.creationTime().toInstant)
                     val timeMap = index.computeIfAbsent(timed.videoUri, _ => new ConcurrentHashMap())
-                    timeMap.put(timed.elapsedTime.toMillis, timed)
+                    timeMap.put((timed.elapsedTime.toMillis, timed.imageType), timed)
                     evictionQueue.add(timed)
                     totalBytes.addAndGet(timed.sizeBytes.getOrElse(0L))
                 }

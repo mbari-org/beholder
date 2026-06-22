@@ -16,13 +16,16 @@
 
 package org.mbari.beholder.api
 
-import scala.concurrent.Future
+import org.mbari.beholder.etc.circe.CirceCodecs.given
 import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.server.ServerEndpoint
-import scala.concurrent.ExecutionContext
-import org.mbari.beholder.etc.circe.CirceCodecs.given
+
+import scala.concurrent.{
+  ExecutionContext,
+  Future
+}
 
 class HealthEndpoints(using ec: ExecutionContext) extends Endpoints:
 

@@ -16,8 +16,6 @@
 
 package org.mbari.beholder
 
-import org.junit.Test
-import org.junit.Assert.*
 
 class SanitySuite extends munit.FunSuite:
 

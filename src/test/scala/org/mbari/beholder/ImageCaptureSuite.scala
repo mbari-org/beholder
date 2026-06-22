@@ -20,12 +20,12 @@ import java.nio.file.Files
 import java.time.Duration
 import org.junit.Assert.*
 
-class JpegCaptureSuite extends munit.FunSuite:
+class ImageCaptureSuite extends munit.FunSuite:
 
   val root = TestUtil.root
   Files.createDirectories(root)
-  val cache = JpegCache(root, 3, .3)
-  val capture = JpegCapture(cache)
+  val cache = ImageCacheImpl(root, 3, .3)
+  val capture = ImageCapture(cache)
 
 
   test("capture"):

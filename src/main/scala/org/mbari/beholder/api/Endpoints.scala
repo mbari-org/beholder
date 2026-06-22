@@ -16,13 +16,14 @@
 
 package org.mbari.beholder.api
 
-import scala.concurrent.Future
+import org.mbari.beholder.etc.circe.CirceCodecs.given
 import sttp.model.StatusCode
 import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.server.ServerEndpoint
-import org.mbari.beholder.etc.circe.CirceCodecs.given
+
+import scala.concurrent.Future
 
 /**
  * Base class for endpoints in the app

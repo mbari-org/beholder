@@ -24,15 +24,24 @@ import org.mbari.beholder.TestUtil
 
 class FfmpegUtilSuite extends munit.FunSuite:
 
-  private val videoUri = TestUtil.bigBuckBunny.toURI
-  
-  test("frameCapture"):
-    val path = Paths.get("target", "trashme.jpg")
-    FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path) match
-      case Left(e) =>
-        fail(s"File was not created at $path")
-      case Right(v) =>
-        val exists = Files.exists(path)
-        assertTrue(s"File was not created at $path", exists)
-    if (Files.exists(path))
-          Files.delete(path)
+    private val videoUri = TestUtil.bigBuckBunny.toURI
+
+    test("frameCapture_jpg"):
+        val path = Paths.get("target", "trashme.jpg")
+        FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path) match
+            case Left(e)  =>
+                fail(s"File was not created at $path")
+            case Right(v) =>
+                val exists = Files.exists(path)
+                assertTrue(s"File was not created at $path", exists)
+        if Files.exists(path) then Files.delete(path)
+
+    test("frameCapture_png"):
+        val path = Paths.get("target", "trashme.png")
+        FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path) match
+            case Left(e)  =>
+                fail(s"File was not created at $path")
+            case Right(v) =>
+                val exists = Files.exists(path)
+                assertTrue(s"File was not created at $path", exists)
+        if Files.exists(path) then Files.delete(path)
