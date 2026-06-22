@@ -5,9 +5,19 @@ echo "--- Building beholder (reminder: run docker login first!!)"
 
 ARCH=$(uname -m)
 if [[ $ARCH == 'arm64' ]]; then
+    # Stage the Docker build context, then find where sbt put it.
+    # sbt 2.0 changed the staging directory from target/docker/stage to
+    # target/out/jvm/scala-X.Y.Z/<project>/docker/stage.
     sbt 'Docker / stage'
-    cd $SCRIPT_DIR/target/docker/stage
-    VCS_REF=`git tag | sort -V | tail -1`
+    STAGE_DIR=$(find "$SCRIPT_DIR/target" -name "Dockerfile" -not -path "*/streams/*" | head -1 | xargs dirname)
+
+    if [[ -z "$STAGE_DIR" || ! -f "$STAGE_DIR/Dockerfile" ]]; then
+        echo "ERROR: could not locate Docker staging directory after 'Docker / stage'" >&2
+        exit 1
+    fi
+
+    cd "$STAGE_DIR"
+    VCS_REF=$(git -C "$SCRIPT_DIR" tag | sort -V | tail -1)
     # https://betterprogramming.pub/how-to-actually-deploy-docker-images-built-on-a-m1-macs-with-apple-silicon-a35e39318e97
     docker buildx build \
       --platform linux/amd64,linux/arm64 \

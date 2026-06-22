@@ -24,6 +24,7 @@ import org.mbari.beholder.util.HexUtil
 import org.mbari.beholder.api.{NotFound, ServerError, StatusMsg, Unauthorized}
 import org.mbari.beholder.api.CaptureRequest
 import org.mbari.beholder.api.HealthStatus
+import org.mbari.beholder.ImageType
 import java.net.URI
 
 /**
@@ -57,7 +58,21 @@ object CirceCodecs:
     given Decoder[Unauthorized] = deriveDecoder
     given Encoder[Unauthorized] = deriveEncoder
 
+    given Decoder[ImageType] = Decoder.decodeString.emap:
+        case "jpg" | "jpeg" => Right(ImageType.Jpeg)
+        case "png"          => Right(ImageType.Png)
+        case other          => Left(s"Unknown image type: $other. Expected jpg, jpeg, or png")
+
+    given Encoder[ImageType] = Encoder.encodeString.contramap(_.extension.stripPrefix("."))
+
     given Decoder[CaptureRequest] = deriveDecoder
+
+//    given Decoder[CaptureRequest] = cursor =>
+//        for
+//            videoUrl          <- cursor.get[String]("videoUrl")
+//            elapsedTimeMillis <- cursor.get[Long]("elapsedTimeMillis")
+//            imageType         <- cursor.getOrElse[Option[ImageType]]("imageType")(None)
+//        yield CaptureRequest(videoUrl, elapsedTimeMillis, imageType)
     given Encoder[CaptureRequest] = deriveEncoder
 
     given Decoder[HealthStatus] = deriveDecoder
