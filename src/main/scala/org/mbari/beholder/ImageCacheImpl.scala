@@ -28,7 +28,7 @@ import org.mbari.beholder.util.NumberUtil
 import scala.jdk.CollectionConverters.*
 
 /**
- * Disk-backed JPEG frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted oldest-first
+ * Disk-backed image frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted oldest-first
  * when total on-disk size exceeds `maxCacheSizeMB`.
  *
  * Improvements over JpegCache:
@@ -92,14 +92,14 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
             .flatMap(m => Option(m.get((jpeg.elapsedTime.toMillis, jpeg.imageType))))
 
     /**
-     * Store a JPEG in the cache. Stamps the creation time as now, then triggers eviction if total size exceeds the
+     * Store a image in the cache. Stamps the creation time as now, then triggers eviction if total size exceeds the
      * limit.
      *
      * @return
      *   The stored Jpeg (with updated creation time)
      */
-    def put(jpeg: CachedImage): CachedImage =
-        val stamped = jpeg.copy(created = Instant.now())
+    def put(cachedImage: CachedImage): CachedImage =
+        val stamped = cachedImage.copy(created = Instant.now())
         val timeMap = index.computeIfAbsent(stamped.videoUri, _ => new ConcurrentHashMap())
 
         // If this (uri, elapsedTime, imageType) already exists, withdraw the old entry's accounting.
@@ -111,14 +111,14 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
         evictionQueue.add(stamped)
         val newTotal = totalBytes.addAndGet(stamped.sizeBytes.getOrElse(0L))
         if newTotal > maxBytes then freeDisk()
-        jpeg
+        stamped
 
-    def remove(jpeg: CachedImage): Option[CachedImage] =
-        Option(index.get(jpeg.videoUri)).flatMap { timeMap =>
-            Option(timeMap.remove((jpeg.elapsedTime.toMillis, jpeg.imageType))).map { jpeg =>
-                evictionQueue.remove(jpeg)
-                totalBytes.addAndGet(-jpeg.sizeBytes.getOrElse(0L))
-                jpeg
+    def remove(cachedImage: CachedImage): Option[CachedImage] =
+        Option(index.get(cachedImage.videoUri)).flatMap { timeMap =>
+            Option(timeMap.remove((cachedImage.elapsedTime.toMillis, cachedImage.imageType))).map { img =>
+                evictionQueue.remove(img)
+                totalBytes.addAndGet(-img.sizeBytes.getOrElse(0L))
+                img
             }
         }
 
@@ -133,13 +133,13 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
                 var freedBytes      = 0L
                 val toDelete        = collection.mutable.ArrayBuffer.empty[CachedImage]
 
-                var jpeg = Option(evictionQueue.pollFirst())
-                while jpeg.isDefined && freedBytes < targetFreeBytes do
-                    val j = jpeg.get
+                var cachedImage = Option(evictionQueue.pollFirst())
+                while cachedImage.isDefined && freedBytes < targetFreeBytes do
+                    val j = cachedImage.get
                     Option(index.get(j.videoUri)).foreach(_.remove((j.elapsedTime.toMillis, j.imageType)))
                     freedBytes += j.sizeBytes.getOrElse(0L)
                     toDelete += j
-                    jpeg =
+                    cachedImage =
                         if freedBytes < targetFreeBytes then Option(evictionQueue.pollFirst())
                         else None
 

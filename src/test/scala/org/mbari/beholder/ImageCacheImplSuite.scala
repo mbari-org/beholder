@@ -26,6 +26,19 @@ class ImageCacheImplSuite extends munit.FunSuite:
     Files.createDirectories(root)
     val videoUri = TestUtil.bigBuckBunny.toURI
 
+    /**
+     * Don't compare the creation date. It's not guaranteed to be the same.
+     * @param a
+     * @param b
+     * @return
+     */
+    def isEqual(a: CachedImage, b: CachedImage): Boolean =
+        a.elapsedTime == b.elapsedTime &&
+        a.path == b.path &&
+        a.sizeBytes == b.sizeBytes &&
+        a.videoUri == b.videoUri &&
+        a.imageType == b.imageType
+
     // ---- JPEG tests ----
 
     test("put and get"):
@@ -34,7 +47,8 @@ class ImageCacheImplSuite extends munit.FunSuite:
         val jpeg  = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000))
 
         val jpeg1 = cache.put(jpeg)
-        assertEquals(jpeg1, jpeg)
+        assertTrue(isEqual(jpeg1, jpeg))
+        assertTrue(jpeg.created.isBefore(jpeg1.created))
 
         cache.get(jpeg1) match
             case None        => fail("We did not get any jpeg back. That's unexpected!")
@@ -114,7 +128,8 @@ class ImageCacheImplSuite extends munit.FunSuite:
         val png   = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
 
         val png1 = cache.put(png)
-        assertEquals(png1, png)
+        assertTrue(isEqual(png1, png))
+        assertTrue(png.created.isBefore(png1.created))
 
         cache.get(png1) match
             case None       => fail("We did not get any png back. That's unexpected!")
