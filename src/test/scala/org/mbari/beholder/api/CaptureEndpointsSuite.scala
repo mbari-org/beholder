@@ -16,7 +16,7 @@
 
 package org.mbari.beholder.api
 
-import org.mbari.beholder.{AppConfig, ImageCacheImpl, ImageCapture, TestUtil}
+import org.mbari.beholder.{AppConfig, ImageCacheImpl, ImageCapture, ImageType, TestUtil}
 
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -76,6 +76,18 @@ class CaptureEndpointsSuite extends munit.FunSuite:
         val req    = CaptureRequest(videoUrl.toExternalForm(), 2345L)
         val result = await(basicRequest.post(uri"http://test.com/capture?nokey=true").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
         assertEquals(result.code.code, 200)
+
+    test("/capture with imageType jpg"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 3456L, Some(ImageType.Jpeg))
+        val result = await(basicRequest.post(uri"http://test.com/capture").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 200)
+        assertEquals(result.header("Content-Type"), Some("image/jpeg"))
+
+    test("/capture with imageType png"):
+        val req    = CaptureRequest(videoUrl.toExternalForm(), 3456L, Some(ImageType.Png))
+        val result = await(basicRequest.post(uri"http://test.com/capture").header("X-Api-Key", AppConfig.Api.Key).body(req.stringify).send(captureStub))
+        assertEquals(result.code.code, 200)
+        assertEquals(result.header("Content-Type"), Some("image/png"))
 
     // ---- /capture/jpg ----
 
