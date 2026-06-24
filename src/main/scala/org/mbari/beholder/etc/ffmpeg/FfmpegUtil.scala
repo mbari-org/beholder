@@ -92,20 +92,21 @@ object FfmpegUtil:
 
         // colorspace=iall=bt709 is a no-op for YUV→YUV same-csp paths and does
         // not update the filter-link prim/trc, so swscaler still sees reserved.
-        // Override the decoder's output metadata at the source instead, using
-        // input options placed before -i.
-        val inputColorspaceArgs: Seq[String] =
+        // Route through an rgb24 intermediate: the YUV→RGB conversion forces the
+        // colorspace filter to run properly and sets prim:bt709 on the link.
+        // The subsequent format=yuv422p (rgb24→YUV) starts from a clean state.
+        val vfArgs: Seq[String] =
             if overrideColorspace then
-                Seq("-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709")
+                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24,format=yuv422p")
             else Seq.empty
 
         Seq(ffmpegExecutable) ++
             Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
-            inputColorspaceArgs ++
             Seq("-i", videoUri.toString) ++ // input file or URL
             Seq("-frames:v", "1") ++
+            vfArgs ++
             Seq(
                 "-qmin",
                 "1",           //
