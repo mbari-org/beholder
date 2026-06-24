@@ -36,29 +36,44 @@ object FfmpegUtil:
     private val ffmpegExecutable: String =
         sys.props.getOrElse("beholder.ffmpeg.path", "ffmpeg")
 
+    // Some cameras (e.g. AJA) produce ProRes files where the ProRes bitstream
+    // atoms carry no colorspace info, so the decoder reports prim:reserved and
+    // trc:reserved even though the MOV container correctly says bt709.  When
+    // swscaler sees reserved primaries/TRC it refuses all pixel-format conversions.
+    // Detect that specific failure so we can retry with an explicit override.
+    private val ReservedColorspacePattern = "prim:reserved|trc:reserved".r
+
+    private def isReservedColorspaceError(err: Throwable): Boolean =
+        ReservedColorspacePattern.findFirstIn(err.getMessage).isDefined
+
     private def buildPngCommand(
         videoUri: URI,
         elapsedTime: Duration,
         target: Path,
         accurate: Boolean = true,
-        skipNonKeyFrames: Boolean = false
+        skipNonKeyFrames: Boolean = false,
+        overrideColorspace: Boolean = false
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
+
+        val vfArgs: Seq[String] =
+            if overrideColorspace then
+                // colorspace=iall=bt709 overrides the reserved metadata on the filter
+                // link level (what swscaler reads) before the pixel-format conversion.
+                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
+            else Seq.empty
 
         Seq(ffmpegExecutable) ++
             Seq("-ss", time) ++
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
+            Seq("-i", videoUri.toString) ++
+            Seq("-frames:v", "1") ++
+            vfArgs ++
             Seq(
-                "-i",
-                videoUri.toString,
-                "-frames:v",
-                "1",
                 "-c:v",
                 "png",
-                "-pix_fmt",
-                "rgb24",           // Pin to 8-bit RGB; avoids swscaler failures on 10-bit
-                "-hide_banner",    // input with reserved colorspace primaries/trc
+                "-hide_banner",
                 "-loglevel",
                 "error",
                 "-y",
@@ -70,30 +85,33 @@ object FfmpegUtil:
         elapsedTime: Duration,
         target: Path,
         accurate: Boolean = true,
-        skipNonKeyFrames: Boolean = false
+        skipNonKeyFrames: Boolean = false,
+        overrideColorspace: Boolean = false
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
+
+        val vfArgs: Seq[String] =
+            if overrideColorspace then
+                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=yuv420p")
+            else Seq.empty
 
         Seq(ffmpegExecutable) ++
             Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
+            Seq("-i", videoUri.toString) ++ // input file or URL
+            Seq("-frames:v", "1") ++
+            vfArgs ++
             Seq(
-                "-i",
-                videoUri.toString, // input file or URL
-                "-frames:v",
-                "1",               // Frame quality 1 (best) to 5
-                "-pix_fmt",
-                "yuv420p",         // Pin to 8-bit YUV; avoids swscaler failures on 10-bit
-                "-qmin",           // input with reserved colorspace primaries/trc
-                "1",               //
+                "-qmin",
+                "1",           //
                 "-q:v",
-                "1",               //
-                "-hide_banner",    // Make quiet
+                "1",           //
+                "-hide_banner", // Make quiet
                 "-loglevel",
-                "error",           // Make quieter
-                "-y",              // Automatically overwrites the output file if it already exists.
-                target.toString    // The output filename for the extracted frame.
+                "error",        // Make quieter
+                "-y",           // Automatically overwrites the output file if it already exists.
+                target.toString // The output filename for the extracted frame.
             )
 
     private def runCommand(cmd: Seq[String]): Either[Throwable, Unit] =
@@ -159,15 +177,25 @@ object FfmpegUtil:
         accurate: Boolean = true,
         skipNonKeyFrames: Boolean = false
     ): Either[Throwable, Path] =
-        val cmd: Seq[String] = ImageType.fromPath(target) match
-            case Some(ImageType.Jpeg) => buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
-            case Some(ImageType.Png)  => buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames)
-            case _                    => Seq.empty
+        def buildCmd(overrideColorspace: Boolean): Seq[String] =
+            ImageType.fromPath(target) match
+                case Some(ImageType.Jpeg) =>
+                    buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames, overrideColorspace)
+                case Some(ImageType.Png)  =>
+                    buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames, overrideColorspace)
+                case _                    => Seq.empty
+
+        val cmd = buildCmd(overrideColorspace = false)
 
         if cmd.isEmpty then Left(new IllegalArgumentException(s"Unsupported image type for target: $target"))
         else
             log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
-
             Option(target.getParent).foreach(p => Files.createDirectories(p))
 
-            runCommand(cmd).map(_ => target)
+            runCommand(cmd) match
+                case Left(err) if isReservedColorspaceError(err) =>
+                    val fallback = buildCmd(overrideColorspace = true)
+                    log.atDebug.log(() => s"Retrying with colorspace override: ${fallback.mkString(" ")}")
+                    runCommand(fallback).map(_ => target)
+                case Left(err)  => Left(err)
+                case Right(())  => Right(target)
