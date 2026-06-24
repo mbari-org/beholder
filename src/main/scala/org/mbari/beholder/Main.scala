@@ -117,6 +117,35 @@ object Main:
         val router            = Router.router(vertx)
         val interpreter       = VertxFutureServerInterpreter()
 
+        // Reject requests with invalid percent-encoded sequences before they
+        // reach Vert.x's route matcher, which throws IllegalArgumentException
+        // on paths like `%uf` (only one hex digit after %).
+        router
+            .route()
+            .handler: ctx =>
+                try
+                    ctx.normalizedPath()
+                    ctx.next()
+                catch
+                    case _: IllegalArgumentException =>
+                        ctx
+                            .response()
+                            .setStatusCode(400)
+                            .putHeader("Content-Type", "text/plain")
+                            .end("Bad Request: invalid URL encoding")
+
+        // Suppress "Unhandled exception in router" for any route failure that
+        // has no specific handler (e.g. 404s from unmatched routes, or exceptions
+        // thrown by Tapir endpoint logic).
+        router
+            .route()
+            .failureHandler: ctx =>
+                val status = if ctx.statusCode() > 0 then ctx.statusCode() else 500
+                val cause  = ctx.failure()
+                if cause != null then log.atWarn.withCause(cause).log(s"Route failure: status=$status")
+                if !ctx.response().ended() then
+                    ctx.response().setStatusCode(status).end()
+
         // Add CORS
         val corsHandler = CorsHandler.create()
             .allowedMethod(io.vertx.core.http.HttpMethod.GET)
@@ -145,4 +174,5 @@ object Main:
             val attach = interpreter.blockingRoute(endpoint)
             attach(router)
 
+        server.exceptionHandler(e => log.atWarn.log(s"Unhandled server exception: ${e.getMessage}"))
         Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)
