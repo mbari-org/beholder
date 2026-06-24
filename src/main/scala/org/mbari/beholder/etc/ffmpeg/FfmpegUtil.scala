@@ -56,7 +56,9 @@ object FfmpegUtil:
                 "1",
                 "-c:v",
                 "png",
-                "-hide_banner",
+                "-pix_fmt",
+                "rgb24",           // Pin to 8-bit RGB; avoids swscaler failures on 10-bit
+                "-hide_banner",    // input with reserved colorspace primaries/trc
                 "-loglevel",
                 "error",
                 "-y",
@@ -81,7 +83,9 @@ object FfmpegUtil:
                 videoUri.toString, // input file or URL
                 "-frames:v",
                 "1",               // Frame quality 1 (best) to 5
-                "-qmin",
+                "-pix_fmt",
+                "yuv420p",         // Pin to 8-bit YUV; avoids swscaler failures on 10-bit
+                "-qmin",           // input with reserved colorspace primaries/trc
                 "1",               //
                 "-q:v",
                 "1",               //
