@@ -58,11 +58,12 @@ object FfmpegUtil:
 
         val vfArgs: Seq[String] =
             if overrideColorspace then
-                Seq("-vf", "crop=iw:ih,colorspace=iall=bt709:all=bt709,format=rgb24")
+                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
             else
-            Seq("-vf", "crop=iw:ih")
+                Seq.empty
 
         Seq(ffmpegExecutable) ++
+            Seq("-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
             Seq("-ss", time) ++
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
@@ -96,11 +97,12 @@ object FfmpegUtil:
         // The subsequent format=yuv422p (rgb24→YUV) starts from a clean state.
         val vfArgs: Seq[String] =
             if overrideColorspace then
-                Seq("-vf", "crop=iw:ih,colorspace=iall=bt709:all=bt709,format=rgb24,format=yuv422p")
+                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
             else
-                Seq("-vf", "crop=iw:ih") // and override clean aperture (clap) metadata so output is always the full encoded frame size)
+                Seq.empty
 
         Seq(ffmpegExecutable) ++
+            Seq("-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
             Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
