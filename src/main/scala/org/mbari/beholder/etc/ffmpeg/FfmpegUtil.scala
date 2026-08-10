@@ -105,7 +105,10 @@ object FfmpegUtil:
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
             Seq("-i", videoUri.toString) ++ // input file or URL
-            Seq("-frames:v", "1") ++
+            Seq(
+                "-map", "0:v:0",     // Explicitly select first video stream (avoids ambiguity when audio streams precede video)
+                "-vf", "crop=iw:ih", // and override clean aperture (clap) metadata so output is always the full encoded frame size
+                "-frames:v", "1") ++
             vfArgs ++
             Seq(
                 "-qmin",
