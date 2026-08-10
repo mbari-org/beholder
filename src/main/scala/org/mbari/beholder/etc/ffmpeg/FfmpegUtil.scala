@@ -58,17 +58,16 @@ object FfmpegUtil:
 
         val vfArgs: Seq[String] =
             if overrideColorspace then
-                // colorspace=iall=bt709 overrides the reserved metadata on the filter
-                // link level (what swscaler reads) before the pixel-format conversion.
-                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
-            else Seq.empty
+                Seq("-vf", "crop=iw:ih,colorspace=iall=bt709:all=bt709,format=rgb24")
+            else
+            Seq("-vf", "crop=iw:ih")
 
         Seq(ffmpegExecutable) ++
             Seq("-ss", time) ++
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
             Seq("-i", videoUri.toString) ++
-            Seq("-frames:v", "1") ++
+            Seq("-map", "0:v:0", "-frames:v", "1") ++
             vfArgs ++
             Seq(
                 "-c:v",
