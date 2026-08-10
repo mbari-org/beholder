@@ -97,8 +97,9 @@ object FfmpegUtil:
         // The subsequent format=yuv422p (rgb24→YUV) starts from a clean state.
         val vfArgs: Seq[String] =
             if overrideColorspace then
-                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24,format=yuv422p")
-            else Seq.empty
+                Seq("-vf", "crop=iw:ih,colorspace=iall=bt709:all=bt709,format=rgb24,format=yuv422p")
+            else
+                Seq("-vf", "crop=iw:ih") // and override clean aperture (clap) metadata so output is always the full encoded frame size)
 
         Seq(ffmpegExecutable) ++
             Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
@@ -107,7 +108,6 @@ object FfmpegUtil:
             Seq("-i", videoUri.toString) ++ // input file or URL
             Seq(
                 "-map", "0:v:0",     // Explicitly select first video stream (avoids ambiguity when audio streams precede video)
-                "-vf", "crop=iw:ih", // and override clean aperture (clap) metadata so output is always the full encoded frame size
                 "-frames:v", "1") ++
             vfArgs ++
             Seq(
