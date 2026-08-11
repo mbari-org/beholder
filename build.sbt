@@ -64,6 +64,7 @@ lazy val root = project
         libraryDependencies ++= Seq(
             auth0,
             auth0jwk,
+            caffeine,
             circeCore,
             circeGeneric,
             circeParser,

@@ -4,6 +4,7 @@ object Dependencies:
 
     lazy val auth0           = "com.auth0"                      % "java-jwt"                   % "4.6.0"
     lazy val auth0jwk        = "com.auth0"                      % "jwks-rsa"                   % "0.24.1"
+    lazy val caffeine        = "com.github.ben-manes.caffeine"  % "caffeine"                   % "3.2.4"
     private val circeVersion = "0.14.16"
     lazy val circeCore       = "io.circe"                      %% "circe-core"                 % circeVersion
     lazy val circeGeneric    = "io.circe"                      %% "circe-generic"              % circeVersion
