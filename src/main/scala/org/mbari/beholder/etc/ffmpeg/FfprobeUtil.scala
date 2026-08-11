@@ -16,6 +16,8 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
+import org.mbari.beholder.AppConfig
+
 import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import org.mbari.beholder.etc.jdk.Logging.given
@@ -29,8 +31,7 @@ import sys.process.*
 object FfprobeUtil extends Ffprobe:
     private val log = System.getLogger(getClass.getName())
 
-    private val ffprobeExecutable: String =
-        sys.props.getOrElse("beholder.ffprobe.path", "ffprobe")
+    private val ffprobeExecutable: String = AppConfig.Ffprobe.Path
 
     /** Not a cache. Throttles the log so a missing ffprobe doesn't warn on every single capture. */
     private val warnedMissingFfprobe = AtomicBoolean(false)

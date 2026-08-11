@@ -16,7 +16,7 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-import org.mbari.beholder.ImageType
+import org.mbari.beholder.{AppConfig, ImageType}
 
 import java.net.URI
 import java.nio.file.{Files, Path}
@@ -33,8 +33,7 @@ import sys.process.*
 object FfmpegUtil:
     private val log = System.getLogger(getClass.getName())
 
-    private val ffmpegExecutable: String =
-        sys.props.getOrElse("beholder.ffmpeg.path", "ffmpeg")
+    private val ffmpegExecutable: String = AppConfig.Ffmpeg.Path
 
     /** Cached, so repeated captures from the same video only shell out to ffprobe once. */
     private val ffprobe: Ffprobe = FfprobeService.default

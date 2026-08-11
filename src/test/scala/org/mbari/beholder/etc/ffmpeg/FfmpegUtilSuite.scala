@@ -63,7 +63,10 @@ class FfmpegUtilSuite extends munit.FunSuite:
                 case Left(e)  =>
                     fail(s"Capture failed: ${e.getMessage}")
                 case Right(_) =>
-                    val image = ImageIO.read(path.toFile)
+                    assertTrue(s"Capture file was not created at $path", Files.exists(path))
+                    val image = Option(ImageIO.read(path.toFile)).getOrElse(
+                        fail(s"Could not read .$extension capture at $path")
+                    )
                     assertEquals(image.getWidth, videoWidth, s"Wrong width for .$extension capture")
                     assertEquals(image.getHeight, videoHeight, s"Wrong height for .$extension capture")
         finally if Files.exists(path) then Files.delete(path)
