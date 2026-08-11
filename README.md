@@ -13,7 +13,10 @@ Beholder is a Scala 3 HTTP microservice that extracts individual frames from vid
 ## Requirements
 
 - Java 21+
-- [ffmpeg](https://ffmpeg.org/download.html) installed and on `PATH`
+- [ffmpeg](https://ffmpeg.org/download.html) **7.1 or newer**, with `ffprobe`, installed and on `PATH`.
+  Both binaries ship in the same package on Homebrew and Debian/Ubuntu. Without `ffprobe`
+  captures still succeed, but H.264/HEVC frames keep their codec padding rows (a green band
+  along the bottom). The Docker image pins and version-checks this for you.
 - [sbt](https://www.scala-sbt.org/) (Scala Build Tool)
 
 ## API

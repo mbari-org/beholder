@@ -40,7 +40,7 @@ class FfprobeService(
         Caffeine
             .newBuilder()
             .maximumSize(maximumSize)
-            .expiresAfterAccess(Duration.ofHours(1))
+            .expireAfterAccess(Duration.ofHours(1))
             .build[URI, VideoSize]()
 
     /**

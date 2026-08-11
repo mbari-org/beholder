@@ -2,7 +2,9 @@
 
 This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
 
-Beholder requires that [ffmpeg](https://ffmpeg.org/) is installed to function correctly. The docker build includes ffmpeg.
+Beholder requires that [ffmpeg](https://ffmpeg.org/) 7.1 or newer, including `ffprobe`, is installed to function correctly. Both ship in the same package on Homebrew and Debian/Ubuntu. Without `ffprobe` captures still succeed, but H.264/HEVC frames keep their codec padding rows.
+
+The docker build includes ffmpeg: the base image is pinned to an Ubuntu release so the ffmpeg major version cannot drift, and the build fails if ffmpeg is older than the required major or if either binary is missing. See the Docker section of `CLAUDE.md`.
 
 ## Useful Commands
 

@@ -29,15 +29,42 @@ Compile / doc / scalacOptions ++= Seq(
     "./src/docs/index.md"
 )
 
+// Oldest ffmpeg we will ship. Container-level clean-aperture (clap) handling landed
+// around 7.1; below that the base image silently changes capture behavior, which is how
+// the image once sat on 6.1.1 while dev machines were on 8.x.
+val minFfmpegMajorVersion = 7
+
+// The apt step, as a single RUN. Docker does no variable substitution in RUN, so the
+// $(...) and $var below are handled by /bin/sh inside the build.
+//
+// ffprobe is a hard requirement, not a nicety: FfmpegUtil passes -apply_cropping 0 to
+// ignore MOV clap atoms, and because that flag is one boolean in ffmpeg it also disables
+// the codec's own crop. FfprobeUtil supplies the size used to reinstate that crop, so
+// without ffprobe H.264/HEVC frames keep their macroblock padding rows (the green band at
+// 1088 instead of 1080).
+val installFfmpegCmd: String =
+    """apt-get update \
+      | && apt-get install -y --no-install-recommends ffmpeg \
+      | && rm -rf /var/lib/apt/lists/* \
+      | && command -v ffmpeg \
+      | && command -v ffprobe \
+      | && ffmpeg_version="$(ffmpeg -version | head -1 | cut -d' ' -f3)" \
+      | && ffmpeg_major="$(printf '%s' "$ffmpeg_version" | sed 's/^[nN]//' | cut -d. -f1 | cut -d- -f1)" \
+      | && echo "ffmpeg version: $ffmpeg_version (major $ffmpeg_major)" \
+      | && { case "$ffmpeg_major" in ''|*[!0-9]*) echo "ERROR: cannot parse ffmpeg version '$ffmpeg_version'" >&2; exit 1;; esac; } \
+      | && { [ "$ffmpeg_major" -ge MIN_FFMPEG_MAJOR ] || { echo "ERROR: ffmpeg $ffmpeg_version is older than required major MIN_FFMPEG_MAJOR" >&2; exit 1; }; }"""
+        .stripMargin('|')
+        .replace("MIN_FFMPEG_MAJOR", minFfmpegMajorVersion.toString)
+
 // Hack to get the apt-get command in the right place in the docker file
-// Inserts apt-get before user is changed to non-root
+// Inserts apt-get before user is changed to non-root (apt needs root)
 def buildDocker(cmds: Seq[CmdLike]): Seq[CmdLike] =
     val idx = cmds.indexWhere(_ match
         case Cmd("USER", user) => user != "root"
         case _                 => false
     )
     cmds.take(idx) ++
-        Seq(Cmd("RUN", "apt-get update && apt-get install -y ffmpeg")) ++
+        Seq(Cmd("RUN", installFfmpegCmd)) ++
         cmds.drop(idx)
 
 lazy val root = project
@@ -45,7 +72,11 @@ lazy val root = project
     .enablePlugins(AutomateHeaderPlugin, GitBranchPrompt, GitVersioning, JavaAppPackaging)
     .settings(
         name                      := "beholder",
-        dockerBaseImage           := "eclipse-temurin:25",
+        // Pinned to the Ubuntu release (26.04 "resolute"), not a digest: the distro is what
+        // determines ffmpeg's major series (8.0.x here), and a tag still picks up patched
+        // rebuilds where a digest would freeze JDK security updates too. Moving to a newer
+        // Ubuntu/JDK is therefore a deliberate bump -- re-check ffmpeg when you make one.
+        dockerBaseImage           := "eclipse-temurin:25-jdk-resolute",
         dockerCommands            := buildDocker(dockerCommands.value),
         dockerEntrypoint          := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
         dockerExposedPorts        := Seq(8080),
