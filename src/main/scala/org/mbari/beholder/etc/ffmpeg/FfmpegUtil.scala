@@ -39,7 +39,7 @@ object FfmpegUtil:
     /** Cached, so repeated captures from the same video only shell out to ffprobe once. */
     private val ffprobe: Ffprobe = FfprobeService.default
 
-    // Some cameras (e.g. AJA) produce ProRes files where the ProRes bitstream
+    // Some cameras (e.g. older AJA on i2MAP) produce ProRes files where the ProRes bitstream
     // atoms carry no colorspace info, so the decoder reports prim:reserved and
     // trc:reserved even though the MOV container correctly says bt709.  When
     // swscaler sees reserved primaries/TRC it refuses all pixel-format conversions.

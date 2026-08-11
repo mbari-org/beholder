@@ -29,19 +29,10 @@ Compile / doc / scalacOptions ++= Seq(
     "./src/docs/index.md"
 )
 
-// Oldest ffmpeg we will ship. Container-level clean-aperture (clap) handling landed
-// around 7.1; below that the base image silently changes capture behavior, which is how
-// the image once sat on 6.1.1 while dev machines were on 8.x.
+// Oldest allowed ffmpeg. Container-level clean-aperture (clap) handling landed around 7.1
 val minFfmpegMajorVersion = 7
 
-// The apt step, as a single RUN. Docker does no variable substitution in RUN, so the
-// $(...) and $var below are handled by /bin/sh inside the build.
-//
-// ffprobe is a hard requirement, not a nicety: FfmpegUtil passes -apply_cropping 0 to
-// ignore MOV clap atoms, and because that flag is one boolean in ffmpeg it also disables
-// the codec's own crop. FfprobeUtil supplies the size used to reinstate that crop, so
-// without ffprobe H.264/HEVC frames keep their macroblock padding rows (the green band at
-// 1088 instead of 1080).
+// The apt step, as a single RUN. ffprobe is a hard requirement
 val installFfmpegCmd: String =
     """apt-get update \
       | && apt-get install -y --no-install-recommends ffmpeg \
@@ -72,10 +63,9 @@ lazy val root = project
     .enablePlugins(AutomateHeaderPlugin, GitBranchPrompt, GitVersioning, JavaAppPackaging)
     .settings(
         name                      := "beholder",
-        // Pinned to the Ubuntu release (26.04 "resolute"), not a digest: the distro is what
-        // determines ffmpeg's major series (8.0.x here), and a tag still picks up patched
-        // rebuilds where a digest would freeze JDK security updates too. Moving to a newer
-        // Ubuntu/JDK is therefore a deliberate bump -- re-check ffmpeg when you make one.
+        // Pinned to the Ubuntu release (26.04 "resolute"); the distro is what
+        // determines ffmpeg's major series (8.0.x here), Moving to a newer
+        // Ubuntu/JDK is a deliberate bump; re-check ffmpeg when you make one.
         dockerBaseImage           := "eclipse-temurin:25-jdk-resolute",
         dockerCommands            := buildDocker(dockerCommands.value),
         dockerEntrypoint          := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
