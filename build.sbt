@@ -29,15 +29,33 @@ Compile / doc / scalacOptions ++= Seq(
     "./src/docs/index.md"
 )
 
+// Oldest allowed ffmpeg. Container-level clean-aperture (clap) handling landed around 7.1
+val minFfmpegMajorVersion = 7
+
+// The apt step, as a single RUN. ffprobe is a hard requirement
+val installFfmpegCmd: String =
+    """apt-get update \
+      | && apt-get install -y --no-install-recommends ffmpeg \
+      | && rm -rf /var/lib/apt/lists/* \
+      | && command -v ffmpeg \
+      | && command -v ffprobe \
+      | && ffmpeg_version="$(ffmpeg -version | head -1 | cut -d' ' -f3)" \
+      | && ffmpeg_major="$(printf '%s' "$ffmpeg_version" | sed 's/^[nN]//' | cut -d. -f1 | cut -d- -f1)" \
+      | && echo "ffmpeg version: $ffmpeg_version (major $ffmpeg_major)" \
+      | && { case "$ffmpeg_major" in ''|*[!0-9]*) echo "ERROR: cannot parse ffmpeg version '$ffmpeg_version'" >&2; exit 1;; esac; } \
+      | && { [ "$ffmpeg_major" -ge MIN_FFMPEG_MAJOR ] || { echo "ERROR: ffmpeg $ffmpeg_version is older than required major MIN_FFMPEG_MAJOR" >&2; exit 1; }; }"""
+        .stripMargin('|')
+        .replace("MIN_FFMPEG_MAJOR", minFfmpegMajorVersion.toString)
+
 // Hack to get the apt-get command in the right place in the docker file
-// Inserts apt-get before user is changed to non-root
+// Inserts apt-get before user is changed to non-root (apt needs root)
 def buildDocker(cmds: Seq[CmdLike]): Seq[CmdLike] =
     val idx = cmds.indexWhere(_ match
         case Cmd("USER", user) => user != "root"
         case _                 => false
     )
     cmds.take(idx) ++
-        Seq(Cmd("RUN", "apt-get update && apt-get install -y ffmpeg")) ++
+        Seq(Cmd("RUN", installFfmpegCmd)) ++
         cmds.drop(idx)
 
 lazy val root = project
@@ -45,7 +63,10 @@ lazy val root = project
     .enablePlugins(AutomateHeaderPlugin, GitBranchPrompt, GitVersioning, JavaAppPackaging)
     .settings(
         name                      := "beholder",
-        dockerBaseImage           := "eclipse-temurin:25",
+        // Pinned to the Ubuntu release (26.04 "resolute"); the distro is what
+        // determines ffmpeg's major series (8.0.x here), Moving to a newer
+        // Ubuntu/JDK is a deliberate bump; re-check ffmpeg when you make one.
+        dockerBaseImage           := "eclipse-temurin:25-jdk-resolute",
         dockerCommands            := buildDocker(dockerCommands.value),
         dockerEntrypoint          := Seq("/opt/docker/bin/beholder", "/opt/beholder/cache"),
         dockerExposedPorts        := Seq(8080),
@@ -64,6 +85,7 @@ lazy val root = project
         libraryDependencies ++= Seq(
             auth0,
             auth0jwk,
+            caffeine,
             circeCore,
             circeGeneric,
             circeParser,

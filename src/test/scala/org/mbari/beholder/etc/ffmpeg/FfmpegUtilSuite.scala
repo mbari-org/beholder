@@ -19,12 +19,17 @@ package org.mbari.beholder.etc.ffmpeg
 import java.time.Duration
 import java.nio.file.Files
 import java.nio.file.Paths
+import javax.imageio.ImageIO
 import org.junit.Assert.*
 import org.mbari.beholder.TestUtil
 
 class FfmpegUtilSuite extends munit.FunSuite:
 
     private val videoUri = TestUtil.bigBuckBunny.toURI
+
+    /** The dimensions the test video declares. Captures must match these exactly. */
+    private val videoWidth  = 1920
+    private val videoHeight = 1080
 
     test("frameCapture_jpg"):
         val path = Paths.get("target", "trashme.jpg")
@@ -45,3 +50,29 @@ class FfmpegUtilSuite extends munit.FunSuite:
                 val exists = Files.exists(path)
                 assertTrue(s"File was not created at $path", exists)
         if Files.exists(path) then Files.delete(path)
+
+    /**
+     * -apply_cropping 0 suppresses the clean-aperture (clap) crop, but it also suppresses the codec's own crop. H.264
+     * pads 1080 up to the 1088 macroblock boundary, and those 8 padding rows are the green band that shows up at the
+     * bottom of MP4 captures. A capture must be exactly the size the video declares.
+     */
+    private def assertCaptureIsFullFrame(extension: String): Unit =
+        val path = Paths.get("target", s"trashme-size.$extension")
+        try
+            FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path) match
+                case Left(e)  =>
+                    fail(s"Capture failed: ${e.getMessage}")
+                case Right(_) =>
+                    assertTrue(s"Capture file was not created at $path", Files.exists(path))
+                    val image = Option(ImageIO.read(path.toFile)).getOrElse(
+                        fail(s"Could not read .$extension capture at $path")
+                    )
+                    assertEquals(image.getWidth, videoWidth, s"Wrong width for .$extension capture")
+                    assertEquals(image.getHeight, videoHeight, s"Wrong height for .$extension capture")
+        finally if Files.exists(path) then Files.delete(path)
+
+    test("frameCapture_jpg has no macroblock padding"):
+        assertCaptureIsFullFrame("jpg")
+
+    test("frameCapture_png has no macroblock padding"):
+        assertCaptureIsFullFrame("png")

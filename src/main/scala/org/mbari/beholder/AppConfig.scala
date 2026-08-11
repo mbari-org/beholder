@@ -34,6 +34,12 @@ object AppConfig:
     object Api:
         val Key: String = Config.getString("beholder.api.key")
 
+    object Ffmpeg:
+        val Path: String = Config.getString("beholder.ffmpeg.path")
+
+    object Ffprobe:
+        val Path: String = Config.getString("beholder.ffprobe.path")
+
     object Http:
         val Port: Int = Config.getInt("beholder.http.port")
 

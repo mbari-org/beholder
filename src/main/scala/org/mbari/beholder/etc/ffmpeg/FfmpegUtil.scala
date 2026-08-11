@@ -16,7 +16,7 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-import org.mbari.beholder.ImageType
+import org.mbari.beholder.{AppConfig, ImageType}
 
 import java.net.URI
 import java.nio.file.{Files, Path}
@@ -33,10 +33,12 @@ import sys.process.*
 object FfmpegUtil:
     private val log = System.getLogger(getClass.getName())
 
-    private val ffmpegExecutable: String =
-        sys.props.getOrElse("beholder.ffmpeg.path", "ffmpeg")
+    private val ffmpegExecutable: String = AppConfig.Ffmpeg.Path
 
-    // Some cameras (e.g. AJA) produce ProRes files where the ProRes bitstream
+    /** Cached, so repeated captures from the same video only shell out to ffprobe once. */
+    private val ffprobe: Ffprobe = FfprobeService.default
+
+    // Some cameras (e.g. older AJA on i2MAP) produce ProRes files where the ProRes bitstream
     // atoms carry no colorspace info, so the decoder reports prim:reserved and
     // trc:reserved even though the MOV container correctly says bt709.  When
     // swscaler sees reserved primaries/TRC it refuses all pixel-format conversions.
@@ -45,6 +47,34 @@ object FfmpegUtil:
 
     private def isReservedColorspaceError(err: Throwable): Boolean =
         ReservedColorspacePattern.findFirstIn(err.getMessage).isDefined
+
+    /**
+     * Build the `-vf` argument shared by every output format.
+     *
+     * `-apply_cropping 0` is what stops the decoder honoring a MOV clean aperture (clap) atom, but ffmpeg has only one
+     * boolean for cropping: it also stops the decoder applying the codec's own crop. That matters for H.264/HEVC in
+     * MP4, where the coded frame is padded up to the macroblock grid (1080 becomes 1088) and the padding rows decode to
+     * Y=0,U=0,V=0, i.e. a green band across the bottom of the image. ProRes has no codec level crop, so it never showed
+     * the problem.
+     *
+     * So we suppress cropping in the decoder and reinstate just the codec's crop here, using the size ffprobe reports
+     * (which ignores the clap). `min()` keeps this safe if the decoded frame is ever smaller than the probe claims: the
+     * crop clamps instead of failing.
+     */
+    private def buildVideoFilters(videoUri: URI, overrideColorspace: Boolean): Seq[String] =
+        val cropFilter = ffprobe
+            .videoSize(videoUri)
+            .map(size => s"crop=min(iw\\,${size.width}):min(ih\\,${size.height}):0:0")
+
+        // colorspace=iall=bt709 is a no-op for YUV→YUV same-csp paths and does
+        // not update the filter-link prim/trc, so swscaler still sees reserved.
+        // Route through an rgb24 intermediate: the YUV→RGB conversion forces the
+        // colorspace filter to run properly and sets prim:bt709 on the link.
+        val colorspaceFilter = Option.when(overrideColorspace)("colorspace=iall=bt709:all=bt709,format=rgb24")
+
+        val filters = (cropFilter ++ colorspaceFilter).toSeq
+        if filters.isEmpty then Seq.empty
+        else Seq("-vf", filters.mkString(","))
 
     private def buildPngCommand(
         videoUri: URI,
@@ -56,11 +86,7 @@ object FfmpegUtil:
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
-        val vfArgs: Seq[String] =
-            if overrideColorspace then
-                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
-            else
-                Seq.empty
+        val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
 
         Seq(ffmpegExecutable) ++
             Seq("-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
@@ -90,32 +116,26 @@ object FfmpegUtil:
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
-        // colorspace=iall=bt709 is a no-op for YUV→YUV same-csp paths and does
-        // not update the filter-link prim/trc, so swscaler still sees reserved.
-        // Route through an rgb24 intermediate: the YUV→RGB conversion forces the
-        // colorspace filter to run properly and sets prim:bt709 on the link.
-        // The subsequent format=yuv422p (rgb24→YUV) starts from a clean state.
-        val vfArgs: Seq[String] =
-            if overrideColorspace then
-                Seq("-vf", "colorspace=iall=bt709:all=bt709,format=rgb24")
-            else
-                Seq.empty
+        val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
 
         Seq(ffmpegExecutable) ++
-            Seq("-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
-            Seq("-ss", time) ++ // Seek. This needs to be first. If it's after -i the capture is MUCH slower
+            Seq("-apply_cropping", "0") ++  // Suppress clap/clean-aperture crop at decoder level; must precede -i
+            Seq("-ss", time) ++             // Seek. This needs to be first. If it's after -i the capture is MUCH slower
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
             Seq("-i", videoUri.toString) ++ // input file or URL
             Seq(
-                "-map", "0:v:0",     // Explicitly select first video stream (avoids ambiguity when audio streams precede video)
-                "-frames:v", "1") ++
+                "-map",
+                "0:v:0", // Explicitly select first video stream (avoids ambiguity when audio streams precede video)
+                "-frames:v",
+                "1"
+            ) ++
             vfArgs ++
             Seq(
                 "-qmin",
-                "1",           //
+                "1",            //
                 "-q:v",
-                "1",           //
+                "1",            //
                 "-hide_banner", // Make quiet
                 "-loglevel",
                 "error",        // Make quieter
@@ -206,5 +226,5 @@ object FfmpegUtil:
                     val fallback = buildCmd(overrideColorspace = true)
                     log.atDebug.log(() => s"Retrying with colorspace override: ${fallback.mkString(" ")}")
                     runCommand(fallback).map(_ => target)
-                case Left(err)  => Left(err)
-                case Right(())  => Right(target)
+                case Left(err)                                   => Left(err)
+                case Right(())                                   => Right(target)

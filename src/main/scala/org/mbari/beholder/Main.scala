@@ -79,7 +79,7 @@ class MainRunner extends Callable[Int]:
         paramLabel = "<rootDirectory>",
         description = Array("The location of the image cache")
     )
-    private var cacheRoot: Path = _
+    private var cacheRoot: Path = scala.compiletime.uninitialized
 
     override def call(): Int =
         Main.run(port, cacheRoot, cacheSizeMB, freePct, apiKey)
