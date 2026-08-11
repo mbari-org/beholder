@@ -18,6 +18,7 @@ package org.mbari.beholder
 
 import com.typesafe.config.ConfigFactory
 
+import java.time.Duration
 import scala.util.Try
 
 object AppConfig:
@@ -38,6 +39,9 @@ object AppConfig:
         val Path: String = Config.getString("beholder.ffmpeg.path")
 
     object Ffprobe:
+        object Cache:
+            val MaxCount: Int = Config.getInt("beholder.ffprobe.cache.maxcount")
+            val Expire: Duration = Config.getDuration("beholder.ffprobe.cache.expire")
         val Path: String = Config.getString("beholder.ffprobe.path")
 
     object Http:

@@ -17,6 +17,7 @@
 package org.mbari.beholder.etc.ffmpeg
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
+import org.mbari.beholder.AppConfig
 
 import java.net.URI
 import java.time.Duration
@@ -33,14 +34,15 @@ import java.time.Duration
  */
 class FfprobeService(
     delegate: Ffprobe = FfprobeUtil,
-    maximumSize: Long = FfprobeService.DefaultMaximumSize
+    maximumSize: Long = AppConfig.Ffprobe.Cache.MaxCount,
+    accessTimeout: Duration = AppConfig.Ffprobe.Cache.Expire
 ) extends Ffprobe:
 
     private val cache: Cache[URI, VideoSize] =
         Caffeine
             .newBuilder()
             .maximumSize(maximumSize)
-            .expireAfterAccess(Duration.ofHours(1))
+            .expireAfterAccess(accessTimeout)
             .build[URI, VideoSize]()
 
     /**
@@ -60,8 +62,6 @@ class FfprobeService(
     def invalidateAll(): Unit = cache.invalidateAll()
 
 object FfprobeService:
-
-    val DefaultMaximumSize: Long = 1000L
 
     /** The instance [[FfmpegUtil]] captures with. */
     lazy val default: FfprobeService = FfprobeService()

@@ -122,16 +122,49 @@ Interactive API documentation is available at `http://localhost:8080/docs` when 
 
 ## Configuration
 
-Settings can be provided via environment variables, a config file, or CLI flags. CLI flags take the highest precedence, followed by environment variables, then the defaults in `reference.conf`.
+Settings can be provided via environment variables, a config file, system properties, or CLI
+flags. Precedence, highest first: **CLI flag → system property (`-D`) → environment variable →
+default in `reference.conf`**.
 
-| Config key | Environment variable | CLI flag | Default |
-|---|---|---|---|
-| `beholder.api.key` | `BEHOLDER_API_KEY` | `-k` / `--apikey` | `foo` |
-| `beholder.http.port` | `BEHOLDER_HTTP_PORT` | `-p` / `--port` | `8080` |
-| `beholder.cache.size` | `BEHOLDER_CACHE_SIZE` | `-c` / `--cachesize` | `500` (MB) |
-| `beholder.cache.freepct` | `BEHOLDER_CACHE_FREEPCT` | `-f` / `--freepct` | `0.20` |
+| Environment variable | Config key | CLI flag | Default | Description |
+|---|---|---|---|---|
+| `BEHOLDER_API_KEY` | `beholder.api.key` | `-k` / `--apikey` | `foo` | API key required in the `X-Api-Key` header |
+| `BEHOLDER_HTTP_PORT` | `beholder.http.port` | `-p` / `--port` | `8080` | HTTP server port |
+| `BEHOLDER_CACHE_SIZE` | `beholder.cache.size` | `-c` / `--cachesize` | `500` | Max size of the image cache, in MB |
+| `BEHOLDER_CACHE_FREEPCT` | `beholder.cache.freepct` | `-f` / `--freepct` | `0.20` | Fraction of the cache to free once it's full |
+| `BEHOLDER_FFMPEG_PATH` | `beholder.ffmpeg.path` | — | `ffmpeg` | Path to the `ffmpeg` executable |
+| `BEHOLDER_FFPROBE_PATH` | `beholder.ffprobe.path` | — | `ffprobe` | Path to the `ffprobe` executable |
+| `BEHOLDER_FFPROBE_CACHE_MAXCOUNT` | `beholder.ffprobe.cache.maxcount` | — | `5000` | Max number of probed videos to remember before evicting |
+| `BEHOLDER_FFPROBE_CACHE_EXPIRE` | `beholder.ffprobe.cache.expire` | — | `12h` | Discard a cached probe this long after its last use |
 
-The cache root directory is a required positional CLI argument (or `BEHOLDER_CACHE_ROOT` env var when running via Docker).
+`BEHOLDER_FFMPEG_PATH` / `BEHOLDER_FFPROBE_PATH` are useful when the binaries are not on `PATH`
+or you need to pin a specific build. The two `BEHOLDER_FFPROBE_CACHE_*` variables tune the
+in-memory `ffprobe` result cache (`FfprobeService`), which keeps repeated captures from the same
+video from re-probing.
+
+### Overriding with a config file
+
+The packaged app reads `conf/application.conf` (shipped empty) and any key set there overrides
+`reference.conf`:
+
+```hocon
+beholder.ffprobe.cache.expire = 1h
+beholder.ffmpeg.path = "/usr/local/bin/ffmpeg"
+```
+
+Or pass any key as a system property, which beats both the file and the environment:
+
+```bash
+beholder -Dbeholder.ffprobe.cache.expire=1h /opt/beholder/cache
+```
+
+### Cache root
+
+The cache root directory is a **required positional CLI argument**, not a config key — it has no
+`reference.conf` entry and no environment variable. Starting the server without it fails with
+`Missing required parameter: '<rootDirectory>'`. The Docker image supplies it in the entrypoint
+(`/opt/beholder/cache`); to relocate the cache, mount your volume there or override the
+entrypoint.
 
 ## Development
 
