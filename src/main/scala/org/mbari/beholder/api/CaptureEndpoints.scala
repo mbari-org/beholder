@@ -51,8 +51,10 @@ class CaptureEndpoints(
         )
     private val apiKeyHeader  = header[String]("X-Api-Key").description("Required key for access")
 
+    // `busy`, not the constructor: the Retry-After it carries has to be jittered, or every client
+    // shed by one burst comes back in the same instant and rebuilds it.
     private def atCapacity(advice: String): ErrorMsg =
-        ServiceUnavailable(s"The server is at capture capacity. $advice")
+        ServiceUnavailable.busy(s"The server is at capture capacity. $advice")
 
     /**
      * Logic for /capture — imageType comes from the request body (defaults to JPEG when absent).

@@ -44,12 +44,8 @@ import scala.util.Try
  * This is a real [[java.util.concurrent.Executor]], so it can be handed to anything that takes one —
  * `ExecutionContext.fromExecutor`, `CompletableFuture.supplyAsync`, and so on.
  *
- * `maxWait` adds the other half of that story. A bounded queue only limits how much work is *accepted*; nothing here
- * cancels a task once queued, so work whose client gave up long ago still costs a full run when it reaches the front,
- * and fresh requests wait behind it. Past a certain depth that is self-sustaining: the pool spends all its time
- * producing results nobody will read. Stamping each task on the way in and discarding it at the front if it has waited
- * too long makes stale work cost a clock comparison instead of an ffmpeg run — which is what lets `queueSize` be
- * generous without the queue turning into a latency trap.
+ * `maxWait` allows the bounded queue to limit how much work is *accepted*; tasks are discarded if they wait too 
+ * long for a worker rather than being run.
  *
  * @param name
  *   Prefix for the worker thread names, so stack dumps say which pool is busy

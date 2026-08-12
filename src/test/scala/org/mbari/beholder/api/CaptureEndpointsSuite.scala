@@ -221,6 +221,21 @@ class CaptureEndpointsSuite extends munit.FunSuite:
     // ---- load shedding ----
 
     /**
+     * A shed request is the one case where the client is expected to come back, so the 503 has to say when in a form a
+     * client can act on. The body already says "retry shortly" in prose that nothing parses.
+     */
+    private def assertRetryAfterHeader(response: Response[?]): Unit =
+        val header = response.header("Retry-After")
+        val advice = header.flatMap(_.toIntOption)
+        assert(
+            advice.exists(s =>
+                s >= ServiceUnavailable.MinRetryAfterSeconds && s <= ServiceUnavailable.MaxRetryAfterSeconds
+            ),
+            s"Expected a Retry-After header of ${ServiceUnavailable.MinRetryAfterSeconds}.." +
+                s"${ServiceUnavailable.MaxRetryAfterSeconds} seconds, got ${header.getOrElse("no header at all")}"
+        )
+
+    /**
      * ffmpeg is the scarce resource, so a burst bigger than the pool has to be turned away at the door. Queueing it
      * instead would mean running captures for clients that gave up long ago, while starving everything else.
      */
@@ -244,6 +259,7 @@ class CaptureEndpointsSuite extends munit.FunSuite:
                         .send(saturated)
                 )
             assertEquals(result.code.code, 503)
+            assertRetryAfterHeader(result)
         finally
             release.countDown()
             busy.shutdown()
@@ -276,7 +292,9 @@ class CaptureEndpointsSuite extends munit.FunSuite:
             Thread.sleep(100)
             release.countDown()
 
-            assertEquals(await(sent).code.code, 503)
+            val result = await(sent)
+            assertEquals(result.code.code, 503)
+            assertRetryAfterHeader(result)
         finally
             release.countDown()
             slow.shutdown()

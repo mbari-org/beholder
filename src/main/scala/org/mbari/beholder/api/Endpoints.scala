@@ -34,12 +34,26 @@ trait Endpoints:
     def all: List[Endpoint[?, ?, ?, ?, ?]]
     def allImpl: List[ServerEndpoint[Any, Future]]
 
+    /**
+     * 503 is the one error worth acting on rather than just reporting, so it carries `Retry-After` alongside the JSON.
+     * The advice is already in the body as prose, but no client parses prose; the header is what a well-behaved one
+     * backs off on.
+     *
+     * The header and the body field are two views of the same number, hence the mapping: encoding projects `retryAfter`
+     * into both, and decoding takes the body and ignores the header, which is redundant there.
+     */
+    private val serviceUnavailableOut: EndpointOutput[ServiceUnavailable] =
+        statusCode(StatusCode.ServiceUnavailable)
+            .and(header[Int]("Retry-After"))
+            .and(jsonBody[ServiceUnavailable])
+            .map { case (_, body) => body }(body => (body.retryAfter, body))
+
     val baseEndpoint = endpoint.errorOut(
         oneOf[ErrorMsg](
             oneOfVariant(statusCode(StatusCode.NotFound).and(jsonBody[NotFound])),
             oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[ServerError])),
             oneOfVariant(statusCode(StatusCode.Unauthorized).and(jsonBody[Unauthorized])),
-            oneOfVariant(statusCode(StatusCode.ServiceUnavailable).and(jsonBody[ServiceUnavailable])),
+            oneOfVariant(serviceUnavailableOut),
             oneOfVariant(statusCode(StatusCode.InternalServerError).and(jsonBody[StatusMsg]))
         )
     )
