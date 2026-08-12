@@ -44,8 +44,8 @@ import scala.util.Try
  * This is a real [[java.util.concurrent.Executor]], so it can be handed to anything that takes one —
  * `ExecutionContext.fromExecutor`, `CompletableFuture.supplyAsync`, and so on.
  *
- * `maxWait` allows the bounded queue to limit how much work is *accepted*; tasks are discarded if they wait too 
- * long for a worker rather than being run.
+ * `maxWait` allows the bounded queue to limit how much work is *accepted*; tasks are discarded if they wait too long
+ * for a worker rather than being run.
  *
  * @param name
  *   Prefix for the worker thread names, so stack dumps say which pool is busy
@@ -73,12 +73,10 @@ class BoundedExecutor(
 
     private val staleDrops = AtomicLong(0)
 
-    // System.nanoTime, not currentTimeMillis: it is monotonic, so a clock step cannot make a task
-    // that was just submitted look like it has been waiting for hours.
+    // System.nanoTime, not currentTimeMillis: it is monotonic
     private def deadlineFromNow(): Long = System.nanoTime() + maxWaitNanos
 
-    // Subtract-then-compare rather than `now >= deadline`, which is the overflow-safe form when
-    // nanoTime is free to start anywhere in the long range.
+    // Subtract-then-compare is overflow safe where `now >= deadline` is not
     private def isStale(deadline: Long): Boolean = maxWaitNanos > 0 && System.nanoTime() - deadline >= 0
 
     private val threadFactory: ThreadFactory =
@@ -88,10 +86,9 @@ class BoundedExecutor(
             t.setDaemon(true)
             t
 
-    // Named `pool`, not `executor`: this class is the executor now, and `executor.execute` inside
-    // an `execute` override reads like recursion.
+    // Our delegate Executor
     private val pool =
-        // Core == max, so the pool never grows past `threads` and the queue is what absorbs bursts.
+        // the pool never grows past `threads` and the queue is what absorbs bursts.
         ThreadPoolExecutor(
             threads,
             threads,
@@ -106,16 +103,11 @@ class BoundedExecutor(
      * Run `command` on this pool, per the [[java.util.concurrent.Executor]] contract: no handle on the result, and
      * saturation reported by throwing rather than by a return value.
      *
-     * A `command` that throws is left to the pool's usual handling — the worker dies and is replaced, and the throwable
-     * reaches the thread's uncaught-exception handler. Callers that want the failure back, or that would rather shed
-     * load than catch, should use [[submit]] instead.
+     * A `command` that throws is left to the pool's usual handling. Callers that want the failure back, or that would
+     * rather shed load than catch, should use [[submit]] instead.
      *
      * Note that `maxWait` is deliberately **not** applied here. Once accepted, a `command` always runs. Silently
-     * dropping it would break every wrapper built on this interface in the worst possible way: `supplyAsync` and
-     * `ExecutionContext.fromExecutor` both complete their result from inside the Runnable, so a Runnable that never
-     * runs leaves them waiting forever. An `Executor` has no channel to report a late refusal on, and a hang is a far
-     * worse answer than a slow success. [[submit]] holds the Promise itself, so it can shed the work and still tell
-     * whoever is waiting — which is why the deadline lives there.
+     * dropping it would break every wrapper built on this interface.
      *
      * @throws java.util.concurrent.RejectedExecutionException
      *   if every worker and queue slot is taken

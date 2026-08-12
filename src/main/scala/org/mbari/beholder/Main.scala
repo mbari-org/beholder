@@ -157,10 +157,20 @@ object Main:
         // thread for the whole capture, so the pool is what caps how many run at once, and
         // anything past its queue is refused with a 503 instead of queued indefinitely.
         val captureExecutor = CaptureEndpoints.defaultExecutor
+
+        // Spelled out rather than logged as a raw duration: zero means the deadline is off, and a
+        // literal "0s" in the log reads like the exact opposite — that everything is dropped at once.
+        val maxWait    = AppConfig.Capture.MaxWait
+        val waitPolicy =
+            if maxWait.isZero || maxWait.isNegative then "no wait deadline"
+            else if maxWait.toSeconds > 0 then s"dropped after ${maxWait.toSeconds}s waiting"
+            else s"dropped after ${maxWait.toMillis}ms waiting"
+
         log.atInfo
             .log(
                 s"Captures limited to ${AppConfig.Capture.Threads} concurrent ffmpeg processes " +
-                    s"(${AppConfig.Capture.QueueSize} queued, ${AppConfig.Ffmpeg.Timeout.toSeconds}s timeout each)"
+                    s"(${AppConfig.Capture.QueueSize} may queue, $waitPolicy, " +
+                    s"killed after ${AppConfig.Ffmpeg.Timeout.toSeconds}s)"
             )
 
         val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey, captureExecutor)
