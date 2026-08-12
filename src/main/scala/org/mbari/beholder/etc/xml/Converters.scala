@@ -16,10 +16,7 @@
 
 package org.mbari.beholder.etc.xml
 
-import org.w3c.dom.{
-  Node,
-  NodeList
-}
+import org.w3c.dom.{Node, NodeList}
 
 given Conversion[NodeList, List[Node]] with
     def apply(nodeList: NodeList): List[Node] =

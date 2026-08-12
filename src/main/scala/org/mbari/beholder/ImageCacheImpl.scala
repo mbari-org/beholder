@@ -28,8 +28,8 @@ import org.mbari.beholder.util.NumberUtil
 import scala.jdk.CollectionConverters.*
 
 /**
- * Disk-backed image frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted oldest-first
- * when total on-disk size exceeds `maxCacheSizeMB`.
+ * Disk-backed image frame cache. Frames are indexed by (videoUri, elapsedTime) for O(1) lookups and evicted
+ * oldest-first when total on-disk size exceeds `maxCacheSizeMB`.
  *
  * Improvements over JpegCache:
  *   - O(1) lookup via nested ConcurrentHashMap (URI → elapsedMs → Jpeg) instead of O(n) TreeSet.find

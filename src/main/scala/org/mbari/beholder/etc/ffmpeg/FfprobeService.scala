@@ -21,6 +21,7 @@ import org.mbari.beholder.AppConfig
 
 import java.net.URI
 import java.time.Duration
+
 /**
  * An [[Ffprobe]] that memoizes what the underlying probe returns.
  *

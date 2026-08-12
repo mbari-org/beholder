@@ -21,11 +21,10 @@ import org.mbari.beholder.{AppConfig, ImageType}
 import java.net.URI
 import java.nio.file.{Files, Path}
 import java.time.Duration
+import java.util.concurrent.TimeoutException
 import org.mbari.beholder.etc.jdk.DurationUtil
 import org.mbari.beholder.etc.jdk.Logging.given
-
-import scala.util.{Failure, Success, Try}
-import sys.process.*
+import org.mbari.beholder.etc.jdk.ProcessRunner
 
 /**
  * Utility functions for using ffmpeg. MOre docs at https://trac.ffmpeg.org/wiki/Seeking
@@ -46,7 +45,7 @@ object FfmpegUtil:
     private val ReservedColorspacePattern = "prim:reserved|trc:reserved".r
 
     private def isReservedColorspaceError(err: Throwable): Boolean =
-        ReservedColorspacePattern.findFirstIn(err.getMessage).isDefined
+        Option(err.getMessage).flatMap(ReservedColorspacePattern.findFirstIn).isDefined
 
     /**
      * Build the `-vf` argument shared by every output format.
@@ -143,17 +142,17 @@ object FfmpegUtil:
                 target.toString // The output filename for the extracted frame.
             )
 
-    private def runCommand(cmd: Seq[String]): Either[Throwable, Unit] =
-        val stdout = new StringBuilder
-        val stderr = new StringBuilder
+    private def discardPartialOutput(target: Path): Unit =
+        try Files.deleteIfExists(target)
+        catch
+            case e: Exception =>
+                log.atWarn.log(() => s"Failed to delete incomplete capture $target: ${e.getMessage}")
 
-        val logger = ProcessLogger(
-            line => stdout.append(line).append(System.lineSeparator()),
-            line => stderr.append(line).append(System.lineSeparator())
-        )
+    private def runCommand(cmd: Seq[String], timeout: Duration): Either[Throwable, Unit] =
+        ProcessRunner.run(cmd, timeout) match
+            case Left(e: TimeoutException) => Left(e)
 
-        Try(Process(cmd).!(logger)) match
-            case Failure(e) =>
+            case Left(e) =>
                 Left(
                     new RuntimeException(
                         s"""Failed to start ffmpeg process.
@@ -168,22 +167,22 @@ object FfmpegUtil:
                     )
                 )
 
-            case Success(exitCode) if exitCode == 0 =>
+            case Right(result) if result.exitCode == 0 =>
                 Right(())
 
-            case Success(exitCode) =>
+            case Right(result) =>
                 Left(
                     new RuntimeException(
-                        s"""ffmpeg exited with non-zero status: $exitCode
+                        s"""ffmpeg exited with non-zero status: ${result.exitCode}
                            |
                            |Command:
                            |${cmd.mkString(" ")}
                            |
                            |stdout:
-                           |$stdout
+                           |${result.stdout}
                            |
                            |stderr:
-                           |$stderr
+                           |${result.stderr}
                            |""".stripMargin
                     )
                 )
@@ -204,7 +203,8 @@ object FfmpegUtil:
         elapsedTime: Duration,
         target: Path,
         accurate: Boolean = true,
-        skipNonKeyFrames: Boolean = false
+        skipNonKeyFrames: Boolean = false,
+        timeout: Duration = AppConfig.Ffmpeg.Timeout
     ): Either[Throwable, Path] =
         def buildCmd(overrideColorspace: Boolean): Seq[String] =
             ImageType.fromPath(target) match
@@ -221,10 +221,16 @@ object FfmpegUtil:
             log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
             Option(target.getParent).foreach(p => Files.createDirectories(p))
 
-            runCommand(cmd) match
+            val result = runCommand(cmd, timeout) match
                 case Left(err) if isReservedColorspaceError(err) =>
                     val fallback = buildCmd(overrideColorspace = true)
                     log.atDebug.log(() => s"Retrying with colorspace override: ${fallback.mkString(" ")}")
-                    runCommand(fallback).map(_ => target)
+                    runCommand(fallback, timeout).map(_ => target)
                 case Left(err)                                   => Left(err)
                 case Right(())                                   => Right(target)
+
+            // A killed or failed ffmpeg can leave a half-written frame behind. Downstream has no
+            // way to tell that from a good capture, so drop it rather than let scanCache adopt it
+            // as a cache entry on the next restart.
+            if result.isLeft then discardPartialOutput(target)
+            result

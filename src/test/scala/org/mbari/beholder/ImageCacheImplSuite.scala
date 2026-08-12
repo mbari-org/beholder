@@ -34,10 +34,10 @@ class ImageCacheImplSuite extends munit.FunSuite:
      */
     def isEqual(a: CachedImage, b: CachedImage): Boolean =
         a.elapsedTime == b.elapsedTime &&
-        a.path == b.path &&
-        a.sizeBytes == b.sizeBytes &&
-        a.videoUri == b.videoUri &&
-        a.imageType == b.imageType
+            a.path == b.path &&
+            a.sizeBytes == b.sizeBytes &&
+            a.videoUri == b.videoUri &&
+            a.imageType == b.imageType
 
     // ---- JPEG tests ----
 
@@ -84,9 +84,9 @@ class ImageCacheImplSuite extends munit.FunSuite:
                 CachedImage(videoUri, elapsedTime, path, sizeBytes = Some(1000000))
         jpegs.foreach(cache.put)
         // After 4 × 1 MB puts into a 3 MB cache (clearPct = 0.3), the oldest should be gone
-        val head = cache.get(jpegs.head)
+        val head  = cache.get(jpegs.head)
         assertTrue(head.isEmpty)
-        val last = cache.get(jpegs.last)
+        val last  = cache.get(jpegs.last)
         assertTrue(last.isDefined)
         cache.clearCache()
 
@@ -125,7 +125,8 @@ class ImageCacheImplSuite extends munit.FunSuite:
     test("put and get (png)"):
         val cache = ImageCacheImpl(root, 3, .3)
         val path  = root.resolve(s"${getClass.getSimpleName}_put_get.png").toAbsolutePath().normalize()
-        val png   = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png   =
+            CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
 
         val png1 = cache.put(png)
         assertTrue(isEqual(png1, png))
@@ -146,8 +147,10 @@ class ImageCacheImplSuite extends munit.FunSuite:
     test("remove (png)"):
         val cache = ImageCacheImpl(root, 3, .3)
         val path  = root.resolve(s"${getClass.getSimpleName}_remove.png").toAbsolutePath().normalize()
-        val png   = CachedImage(videoUri, Duration.ofMillis(750), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
-        val png1  = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png   =
+            CachedImage(videoUri, Duration.ofMillis(750), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png1  =
+            CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
         cache.put(png)
         cache.put(png1)
         assertTrue(cache.get(png).isDefined)
@@ -166,9 +169,9 @@ class ImageCacheImplSuite extends munit.FunSuite:
                 CachedImage(videoUri, elapsedTime, path, sizeBytes = Some(1000000), imageType = ImageType.Png)
         pngs.foreach(cache.put)
         // After 4 × 1 MB puts into a 3 MB cache (clearPct = 0.3), the oldest should be gone
-        val head = cache.get(pngs.head)
+        val head  = cache.get(pngs.head)
         assertTrue(head.isEmpty)
-        val last = cache.get(pngs.last)
+        val last  = cache.get(pngs.last)
         assertTrue(last.isDefined)
         cache.clearCache()
 
@@ -216,8 +219,8 @@ class ImageCacheImplSuite extends munit.FunSuite:
         cache.clearCache()
 
     test("totalImages (mixed types)"):
-        val cache   = ImageCacheImpl(root, 100, .3)
-        val elapsed = Duration.ofMillis(1000)
+        val cache    = ImageCacheImpl(root, 100, .3)
+        val elapsed  = Duration.ofMillis(1000)
         val jpegPath = root.resolve(s"${getClass.getSimpleName}_total_mixed.jpg").toAbsolutePath().normalize()
         val pngPath  = root.resolve(s"${getClass.getSimpleName}_total_mixed.png").toAbsolutePath().normalize()
         val jpeg     = CachedImage(videoUri, elapsed, jpegPath, sizeBytes = Some(100))

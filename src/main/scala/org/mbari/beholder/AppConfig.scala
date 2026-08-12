@@ -35,14 +35,32 @@ object AppConfig:
     object Api:
         val Key: String = Config.getString("beholder.api.key")
 
+    /**
+     * Sizing for the pool that runs ffmpeg. Both settings accept 0, meaning "work it out from the machine". Deriving
+     * threads from the CPU count has to survive a small container: a quarter of one processor rounds to zero, and a
+     * pool of zero threads is refused, so the floor is what keeps the service startable.
+     */
+    object Capture:
+        val Threads: Int =
+            Config.getInt("beholder.capture.threads") match
+                case configured if configured > 0 => configured
+                case _                            => math.max(2, Runtime.getRuntime.availableProcessors / 4)
+
+        val QueueSize: Int =
+            Config.getInt("beholder.capture.queuesize") match
+                case configured if configured > 0 => configured
+                case _                            => Threads * 8
+
     object Ffmpeg:
-        val Path: String = Config.getString("beholder.ffmpeg.path")
+        val Path: String      = Config.getString("beholder.ffmpeg.path")
+        val Timeout: Duration = Config.getDuration("beholder.ffmpeg.timeout")
 
     object Ffprobe:
         object Cache:
-            val MaxCount: Int = Config.getInt("beholder.ffprobe.cache.maxcount")
+            val MaxCount: Int    = Config.getInt("beholder.ffprobe.cache.maxcount")
             val Expire: Duration = Config.getDuration("beholder.ffprobe.cache.expire")
-        val Path: String = Config.getString("beholder.ffprobe.path")
+        val Path: String      = Config.getString("beholder.ffprobe.path")
+        val Timeout: Duration = Config.getDuration("beholder.ffprobe.timeout")
 
     object Http:
         val Port: Int = Config.getInt("beholder.http.port")

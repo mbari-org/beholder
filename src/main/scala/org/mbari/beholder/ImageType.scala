@@ -22,9 +22,12 @@ import java.nio.file.Path
 
 /**
  * The image type. Used to determine the image type of a cached image.
- * @param extension The extension for the image type (e.g. ".jpg", ".png")
- * @param mediaType The media type (e.g. "image/jpeg", "image/png")
- * @param evictionOrder The order in which the image type is evicted from the cache. Lower values are evicted first.
+ * @param extension
+ *   The extension for the image type (e.g. ".jpg", ".png")
+ * @param mediaType
+ *   The media type (e.g. "image/jpeg", "image/png")
+ * @param evictionOrder
+ *   The order in which the image type is evicted from the cache. Lower values are evicted first.
  */
 enum ImageType(val extension: String, val mediaType: String, val evictionOrder: Int):
     case Jpeg extends ImageType(".jpg", "image/jpeg", 2)

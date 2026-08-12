@@ -22,10 +22,7 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.server.ServerEndpoint
 
-import scala.concurrent.{
-  ExecutionContext,
-  Future
-}
+import scala.concurrent.{ExecutionContext, Future}
 
 class HealthEndpoints(using ec: ExecutionContext) extends Endpoints:
 

@@ -22,24 +22,22 @@ import org.junit.Assert.*
 
 class ImageCaptureSuite extends munit.FunSuite:
 
-  val root = TestUtil.root
-  Files.createDirectories(root)
-  val cache = ImageCacheImpl(root, 3, .3)
-  val capture = ImageCapture(cache)
+    val root    = TestUtil.root
+    Files.createDirectories(root)
+    val cache   = ImageCacheImpl(root, 3, .3)
+    val capture = ImageCapture(cache)
 
-
-  test("capture"):
-    capture.capture(TestUtil.bigBuckBunny.toURI, Duration.ofMillis(1234)) match 
-      case Left(_) => fail("Expected an image to be captured and it wasn't")
-      case Right(jpeg0) => // Check values
+    test("capture"):
         capture.capture(TestUtil.bigBuckBunny.toURI, Duration.ofMillis(1234)) match
-          case Left(_) => fail("Expected an image to be in the cache")
-          case Right(jpeg1) =>
-            // Cache changes creationDate. So we can't just compare jpeg1 and jpeg2.
-            assertEquals(jpeg1.elapsedTime, jpeg0.elapsedTime)
-            assertEquals(jpeg1.path, jpeg0.path)
-            assertTrue(jpeg1.sizeBytes.isDefined)
-            assertTrue(jpeg0.sizeBytes.isDefined)
-            assertEquals(jpeg1.sizeBytes.get, jpeg0.sizeBytes.get)
-            assertEquals(jpeg1.videoUri, jpeg0.videoUri)
-  
+            case Left(_)      => fail("Expected an image to be captured and it wasn't")
+            case Right(jpeg0) => // Check values
+                capture.capture(TestUtil.bigBuckBunny.toURI, Duration.ofMillis(1234)) match
+                    case Left(_)      => fail("Expected an image to be in the cache")
+                    case Right(jpeg1) =>
+                        // Cache changes creationDate. So we can't just compare jpeg1 and jpeg2.
+                        assertEquals(jpeg1.elapsedTime, jpeg0.elapsedTime)
+                        assertEquals(jpeg1.path, jpeg0.path)
+                        assertTrue(jpeg1.sizeBytes.isDefined)
+                        assertTrue(jpeg0.sizeBytes.isDefined)
+                        assertEquals(jpeg1.sizeBytes.get, jpeg0.sizeBytes.get)
+                        assertEquals(jpeg1.videoUri, jpeg0.videoUri)

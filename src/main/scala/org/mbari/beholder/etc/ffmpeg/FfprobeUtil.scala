@@ -19,16 +19,20 @@ package org.mbari.beholder.etc.ffmpeg
 import org.mbari.beholder.AppConfig
 
 import java.net.URI
+import java.time.Duration
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import org.mbari.beholder.etc.jdk.Logging.given
-
-import scala.util.{Failure, Success, Try}
-import sys.process.*
+import org.mbari.beholder.etc.jdk.ProcessRunner
 
 /**
  * Utility functions for using ffprobe. Every call shells out; use [[FfprobeService]] if you want the results cached.
+ *
+ * @param timeout
+ *   How long a probe may run before it is killed. A probe runs on the same pool as the capture that follows it, so an
+ *   unreachable video must not be allowed to pin that thread indefinitely.
  */
-object FfprobeUtil extends Ffprobe:
+class FfprobeUtil(timeout: Duration = AppConfig.Ffprobe.Timeout) extends Ffprobe:
     private val log = System.getLogger(getClass.getName())
 
     private val ffprobeExecutable: String = AppConfig.Ffprobe.Path
@@ -50,22 +54,21 @@ object FfprobeUtil extends Ffprobe:
             videoUri.toString
         )
 
-        val stdout = new StringBuilder
-        val stderr = new StringBuilder
-        val logger = ProcessLogger(
-            line => stdout.append(line).append(System.lineSeparator()),
-            line => stderr.append(line).append(System.lineSeparator())
-        )
-
         log.atDebug.log(() => s"Executing ${cmd.mkString(" ")}")
 
-        // Neither failure branch is fatal: the caller just captures without an explicit crop.
-        Try(Process(cmd).!(logger)) match
-            case Success(0)        => parse(stdout.toString)
-            case Success(exitCode) =>
-                log.atDebug.log(() => s"ffprobe exited with $exitCode for $videoUri. stderr: $stderr")
+        // No failure branch here is fatal: the caller just captures without an explicit crop.
+        ProcessRunner.run(cmd, timeout) match
+            case Right(result) if result.exitCode == 0 => parse(result.stdout)
+
+            case Right(result) =>
+                log.atDebug.log(() => s"ffprobe exited with ${result.exitCode} for $videoUri. stderr: ${result.stderr}")
                 None
-            case Failure(e)        =>
+
+            case Left(_: TimeoutException) =>
+                // Already logged by ProcessRunner, which knows the process had to be killed.
+                None
+
+            case Left(e) =>
                 // Worth surfacing. Without ffprobe we can't crop off the codec's macroblock
                 // padding, so H.264 captures come back with a green band along the bottom.
                 if warnedMissingFfprobe.compareAndSet(false, true) then
@@ -91,3 +94,6 @@ object FfprobeUtil extends Ffprobe:
             .map(_.split(","))
             .collect { case Array(w, h) => (w.trim.toIntOption, h.trim.toIntOption) }
             .collect { case (Some(w), Some(h)) if w > 0 && h > 0 => VideoSize(w, h) }
+
+/** The configured instance. [[FfprobeService.default]] wraps this one in its cache. */
+object FfprobeUtil extends FfprobeUtil(AppConfig.Ffprobe.Timeout)

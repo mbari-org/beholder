@@ -20,28 +20,17 @@ import io.vertx.core.Vertx
 import io.vertx.core.http.HttpServerOptions
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.handler.CorsHandler
-import org.mbari.beholder.api.{
-  CaptureEndpoints,
-  HealthEndpoints,
-  SwaggerEndpoints
-}
+import org.mbari.beholder.api.{CaptureEndpoints, HealthEndpoints, SwaggerEndpoints}
 import org.mbari.beholder.etc.jdk.Logging.given
 import picocli.CommandLine
 import picocli.CommandLine.{Command, Option as Opt, Parameters}
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter
 import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
 
-import java.nio.file.{
-  Files,
-  Path
-}
+import java.nio.file.{Files, Path}
 import java.util.concurrent.Callable
 import scala.concurrent.duration.Duration
-import scala.concurrent.{
-  Await,
-  ExecutionContext,
-  ExecutionContextExecutor
-}
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
 
 @Command(
     description = Array("Start the server"),
@@ -143,11 +132,11 @@ object Main:
                 val status = if ctx.statusCode() > 0 then ctx.statusCode() else 500
                 val cause  = ctx.failure()
                 if cause != null then log.atWarn.withCause(cause).log(s"Route failure: status=$status")
-                if !ctx.response().ended() then
-                    ctx.response().setStatusCode(status).end()
+                if !ctx.response().ended() then ctx.response().setStatusCode(status).end()
 
         // Add CORS
-        val corsHandler = CorsHandler.create()
+        val corsHandler = CorsHandler
+            .create()
             .allowedMethod(io.vertx.core.http.HttpMethod.GET)
             .allowedMethod(io.vertx.core.http.HttpMethod.POST)
             .allowedHeader("X-Requested-With")
@@ -161,9 +150,20 @@ object Main:
             log.atInfo.log(() => s"Creating cache directory: $cacheRoot")
             Files.createDirectories(cacheRoot)
 
-        val jpegCache        = ImageCacheImpl(cacheRoot, cacheSizeMb, freePct)
-        val jpegCapture      = ImageCapture(jpegCache)
-        val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey)
+        val jpegCache   = ImageCacheImpl(cacheRoot, cacheSizeMb, freePct)
+        val jpegCapture = ImageCapture(jpegCache)
+
+        // Captures run here, not on the global ExecutionContext: an ffmpeg process holds its
+        // thread for the whole capture, so the pool is what caps how many run at once, and
+        // anything past its queue is refused with a 503 instead of queued indefinitely.
+        val captureExecutor = CaptureEndpoints.defaultExecutor
+        log.atInfo
+            .log(
+                s"Captures limited to ${AppConfig.Capture.Threads} concurrent ffmpeg processes " +
+                    s"(${AppConfig.Capture.QueueSize} queued, ${AppConfig.Ffmpeg.Timeout.toSeconds}s timeout each)"
+            )
+
+        val captureEndpoints = CaptureEndpoints(jpegCapture, apiKey, captureExecutor)
         val healthEndpoints  = HealthEndpoints()
         val swaggerEndpoints = SwaggerEndpoints(captureEndpoints, healthEndpoints)
         val allEndpointImpls =

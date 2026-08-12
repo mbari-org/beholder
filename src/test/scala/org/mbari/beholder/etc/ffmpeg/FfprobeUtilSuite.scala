@@ -18,6 +18,7 @@ package org.mbari.beholder.etc.ffmpeg
 
 import java.net.URI
 import java.nio.file.Files
+import java.time.Duration
 import org.mbari.beholder.TestUtil
 
 class FfprobeUtilSuite extends munit.FunSuite:
@@ -34,3 +35,11 @@ class FfprobeUtilSuite extends munit.FunSuite:
             Files.writeString(notAVideo, "I am definitely not an MP4")
             assertEquals(FfprobeUtil.videoSize(notAVideo.toUri), None)
         finally Files.deleteIfExists(notAVideo)
+
+    /**
+     * A probe runs on the same pool as the capture it precedes, so an unreachable video must not be able to pin that
+     * thread either. ffprobe cannot open and read a stream in a millisecond, so this always trips the timeout.
+     */
+    test("videoSize is None when ffprobe exceeds its timeout"):
+        val impatient = FfprobeUtil(Duration.ofMillis(1))
+        assertEquals(impatient.videoSize(TestUtil.bigBuckBunny.toURI), None)

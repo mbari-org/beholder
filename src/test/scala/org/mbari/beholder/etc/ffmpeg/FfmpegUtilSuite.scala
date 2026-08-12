@@ -76,3 +76,28 @@ class FfmpegUtilSuite extends munit.FunSuite:
 
     test("frameCapture_png has no macroblock padding"):
         assertCaptureIsFullFrame("png")
+
+    /**
+     * A capture that never finishes must not pin its thread forever. ffmpeg cannot start, seek and encode in a
+     * millisecond, so this always trips the timeout.
+     */
+    test("frameCapture gives up and fails when ffmpeg exceeds its timeout"):
+        val path = Paths.get("target", "trashme-timeout.jpg")
+        try
+            val result = FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path, timeout = Duration.ofMillis(1))
+            assertTrue(s"Expected a timeout failure, got $result", result.isLeft)
+        finally if Files.exists(path) then Files.delete(path)
+
+    /**
+     * A killed ffmpeg can leave a half-written frame at the target path. Nothing downstream can tell that apart from a
+     * good capture — scanCache would index it as a real cache entry on the next restart — so a failed capture must not
+     * leave a file behind.
+     */
+    test("frameCapture removes the output file when the capture fails"):
+        val path = Paths.get("target", "trashme-partial.jpg")
+        Files.writeString(path, "a truncated frame")
+        try
+            val result = FfmpegUtil.frameCapture(videoUri, Duration.ofMillis(250), path, timeout = Duration.ofMillis(1))
+            assertTrue(s"Expected the capture to fail, got $result", result.isLeft)
+            assertTrue(s"A failed capture left $path behind", !Files.exists(path))
+        finally if Files.exists(path) then Files.delete(path)

@@ -34,3 +34,6 @@ final case class StatusMsg(message: String, responseCode: Int)          extends 
 final case class NotFound(message: String, responseCode: Int = 404)     extends ErrorMsg
 final case class ServerError(message: String, responseCode: Int = 500)  extends ErrorMsg
 final case class Unauthorized(message: String, responseCode: Int = 401) extends ErrorMsg
+
+/** The server is healthy but has no capacity for this request right now. Retrying later should work. */
+final case class ServiceUnavailable(message: String, responseCode: Int = 503) extends ErrorMsg
