@@ -18,6 +18,7 @@ package org.mbari.beholder.etc.jdk
 
 import java.util.concurrent.{
     ArrayBlockingQueue,
+    Executor,
     RejectedExecutionException,
     ThreadFactory,
     ThreadPoolExecutor,
@@ -41,6 +42,12 @@ import scala.util.Try
  * Here, saturation is visible instead. `submit` returns `None` rather than queueing without limit, which lets the
  * caller shed load — an immediate "busy" is a better answer than a response nobody is waiting for any more.
  *
+ * This is a real [[java.util.concurrent.Executor]], so it can be handed to anything that takes one —
+ * `ExecutionContext.fromExecutor`, `CompletableFuture.supplyAsync`, and so on. It stops at `Executor` rather than
+ * `ExecutorService`: the lifecycle half of that interface (`awaitTermination`, `invokeAll`, task cancellation) is not
+ * something this class implements honestly, and its `submit` overloads would collide with the by-name [[submit]] below,
+ * which is the whole point of the class.
+ *
  * @param name
  *   Prefix for the worker thread names, so stack dumps say which pool is busy
  * @param threads
@@ -48,7 +55,7 @@ import scala.util.Try
  * @param queueSize
  *   How many may wait
  */
-class BoundedExecutor(name: String, threads: Int, queueSize: Int):
+class BoundedExecutor(name: String, threads: Int, queueSize: Int) extends Executor:
 
     require(threads > 0, s"threads must be > 0. You used $threads")
     require(queueSize > 0, s"queueSize must be > 0. You used $queueSize")
@@ -62,7 +69,9 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int):
             t.setDaemon(true)
             t
 
-    private val executor =
+    // Named `pool`, not `executor`: this class is the executor now, and `executor.execute` inside
+    // an `execute` override reads like recursion.
+    private val pool =
         // Core == max, so the pool never grows past `threads` and the queue is what absorbs bursts.
         ThreadPoolExecutor(
             threads,
@@ -75,6 +84,19 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int):
         )
 
     /**
+     * Run `command` on this pool, per the [[java.util.concurrent.Executor]] contract: no handle on the result, and
+     * saturation reported by throwing rather than by a return value.
+     *
+     * A `command` that throws is left to the pool's usual handling — the worker dies and is replaced, and the throwable
+     * reaches the thread's uncaught-exception handler. Callers that want the failure back, or that would rather shed
+     * load than catch, should use [[submit]] instead.
+     *
+     * @throws java.util.concurrent.RejectedExecutionException
+     *   if every worker and queue slot is taken
+     */
+    override def execute(command: Runnable): Unit = pool.execute(command)
+
+    /**
      * Run `body` on this pool.
      *
      * @return
@@ -84,7 +106,7 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int):
     def submit[A](body: => A): Option[Future[A]] =
         val promise = Promise[A]()
         try
-            executor.execute: () =>
+            execute: () =>
                 try promise.complete(Try(body))
                 catch
                     // Try rethrows anything NonFatal declines to catch, InterruptedException
@@ -104,6 +126,6 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int):
                 None
 
     /** How many tasks are waiting for a worker. Approximate — the queue moves while you read it. */
-    def queued: Int = executor.getQueue.size()
+    def queued: Int = pool.getQueue.size()
 
-    def shutdown(): Unit = executor.shutdownNow()
+    def shutdown(): Unit = pool.shutdownNow()
