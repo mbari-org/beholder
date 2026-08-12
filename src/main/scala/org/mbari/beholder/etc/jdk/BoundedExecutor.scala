@@ -16,6 +16,7 @@
 
 package org.mbari.beholder.etc.jdk
 
+import java.time.Duration
 import java.util.concurrent.{
     ArrayBlockingQueue,
     Executor,
@@ -24,7 +25,7 @@ import java.util.concurrent.{
     ThreadPoolExecutor,
     TimeUnit
 }
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import org.mbari.beholder.etc.jdk.Logging.given
 
 import scala.concurrent.{Future, Promise}
@@ -35,18 +36,20 @@ import scala.util.Try
  *
  * The alternative — `Future` on `ExecutionContext.global` — is a poor fit for shelling out to a subprocess. Its queue
  * is unbounded, so a burst is accepted in full and the clients at the back have long since timed out by the time their
- * work runs; and because the pool is shared, that backlog also delays anything else the service wanted to do (a health
- * check, say). Blocking a worker there is invisible to the pool as well: `ForkJoinPool` only grows a compensation
- * thread for code that announces itself with `scala.concurrent.blocking`, which `scala.sys.process` does not.
+ * work runs.
  *
  * Here, saturation is visible instead. `submit` returns `None` rather than queueing without limit, which lets the
  * caller shed load — an immediate "busy" is a better answer than a response nobody is waiting for any more.
  *
  * This is a real [[java.util.concurrent.Executor]], so it can be handed to anything that takes one —
- * `ExecutionContext.fromExecutor`, `CompletableFuture.supplyAsync`, and so on. It stops at `Executor` rather than
- * `ExecutorService`: the lifecycle half of that interface (`awaitTermination`, `invokeAll`, task cancellation) is not
- * something this class implements honestly, and its `submit` overloads would collide with the by-name [[submit]] below,
- * which is the whole point of the class.
+ * `ExecutionContext.fromExecutor`, `CompletableFuture.supplyAsync`, and so on.
+ *
+ * `maxWait` adds the other half of that story. A bounded queue only limits how much work is *accepted*; nothing here
+ * cancels a task once queued, so work whose client gave up long ago still costs a full run when it reaches the front,
+ * and fresh requests wait behind it. Past a certain depth that is self-sustaining: the pool spends all its time
+ * producing results nobody will read. Stamping each task on the way in and discarding it at the front if it has waited
+ * too long makes stale work cost a clock comparison instead of an ffmpeg run — which is what lets `queueSize` be
+ * generous without the queue turning into a latency trap.
  *
  * @param name
  *   Prefix for the worker thread names, so stack dumps say which pool is busy
@@ -54,13 +57,33 @@ import scala.util.Try
  *   How many tasks may run at once
  * @param queueSize
  *   How many may wait
+ * @param maxWait
+ *   How long a task may sit in the queue before a worker discards it rather than running it. Applies to [[submit]] only
+ *   — see [[execute]] for why. Zero or negative means no deadline: queued work always runs, however long it waited.
  */
-class BoundedExecutor(name: String, threads: Int, queueSize: Int) extends Executor:
+class BoundedExecutor(
+    name: String,
+    threads: Int,
+    queueSize: Int,
+    maxWait: Duration = Duration.ZERO
+) extends Executor:
 
     require(threads > 0, s"threads must be > 0. You used $threads")
     require(queueSize > 0, s"queueSize must be > 0. You used $queueSize")
 
     private val log = System.getLogger(getClass.getName)
+
+    private val maxWaitNanos: Long = maxWait.toNanos
+
+    private val staleDrops = AtomicLong(0)
+
+    // System.nanoTime, not currentTimeMillis: it is monotonic, so a clock step cannot make a task
+    // that was just submitted look like it has been waiting for hours.
+    private def deadlineFromNow(): Long = System.nanoTime() + maxWaitNanos
+
+    // Subtract-then-compare rather than `now >= deadline`, which is the overflow-safe form when
+    // nanoTime is free to start anywhere in the long range.
+    private def isStale(deadline: Long): Boolean = maxWaitNanos > 0 && System.nanoTime() - deadline >= 0
 
     private val threadFactory: ThreadFactory =
         val counter = AtomicInteger(0)
@@ -91,6 +114,13 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int) extends Execut
      * reaches the thread's uncaught-exception handler. Callers that want the failure back, or that would rather shed
      * load than catch, should use [[submit]] instead.
      *
+     * Note that `maxWait` is deliberately **not** applied here. Once accepted, a `command` always runs. Silently
+     * dropping it would break every wrapper built on this interface in the worst possible way: `supplyAsync` and
+     * `ExecutionContext.fromExecutor` both complete their result from inside the Runnable, so a Runnable that never
+     * runs leaves them waiting forever. An `Executor` has no channel to report a late refusal on, and a hang is a far
+     * worse answer than a slow success. [[submit]] holds the Promise itself, so it can shed the work and still tell
+     * whoever is waiting — which is why the deadline lives there.
+     *
      * @throws java.util.concurrent.RejectedExecutionException
      *   if every worker and queue slot is taken
      */
@@ -99,26 +129,46 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int) extends Execut
     /**
      * Run `body` on this pool.
      *
+     * There are two ways this sheds load, and they are reported differently because they are known at different times.
+     * A full queue is known immediately, so it comes back as `None`. Having waited past `maxWait` is only known once a
+     * worker picks the task up, by which point the caller already holds a Future — so that arrives as a
+     * [[BoundedExecutor.StaleWorkException]] on the Future. Both mean the same thing to a caller: the work did not run
+     * and will not, because the service is over capacity.
+     *
      * @return
      *   The eventual result, or None if the pool and its queue are both full. A `body` that throws fails the returned
      *   Future; it does not take the worker thread down with it.
      */
     def submit[A](body: => A): Option[Future[A]] =
-        val promise = Promise[A]()
+        val promise  = Promise[A]()
+        // Stamped here, on the submitting thread, so it measures the wait rather than the run.
+        val deadline = deadlineFromNow()
         try
             execute: () =>
-                try promise.complete(Try(body))
-                catch
-                    // Try rethrows anything NonFatal declines to catch, InterruptedException
-                    // included, which would leave the promise — and whoever is waiting on it —
-                    // hanging. Interruption is normal at shutdown, so report it and let the pool
-                    // see the flag; anything else is genuinely fatal and still propagates.
-                    case t: InterruptedException =>
-                        promise.tryFailure(t)
-                        Thread.currentThread().interrupt()
-                    case t: Throwable            =>
-                        promise.tryFailure(t)
-                        throw t
+                if isStale(deadline) then
+                    val dropped = staleDrops.incrementAndGet()
+                    log.atDebug
+                        .log(() =>
+                            s"$name discarded work that waited longer than ${maxWait.toMillis}ms for a worker ($dropped so far)"
+                        )
+                    promise.tryFailure(
+                        BoundedExecutor.StaleWorkException(
+                            s"Waited longer than ${maxWait.toMillis}ms for a worker in the $name pool"
+                        )
+                    )
+                else
+                    try promise.complete(Try(body))
+                    catch
+                        // Try rethrows anything NonFatal declines to catch, InterruptedException
+                        // included, which would leave the promise — and whoever is waiting on it —
+                        // hanging. Interruption is normal at shutdown, so report it and let the pool
+                        // see the flag; anything else is genuinely fatal and still propagates.
+                        case t: InterruptedException =>
+                            promise.tryFailure(t)
+                            Thread.currentThread().interrupt()
+                        case t: Throwable            =>
+                            promise.tryFailure(t)
+                            throw t
             Some(promise.future)
         catch
             case _: RejectedExecutionException =>
@@ -128,4 +178,24 @@ class BoundedExecutor(name: String, threads: Int, queueSize: Int) extends Execut
     /** How many tasks are waiting for a worker. Approximate — the queue moves while you read it. */
     def queued: Int = pool.getQueue.size()
 
+    /**
+     * How many tasks have been discarded for waiting past `maxWait` instead of being run.
+     *
+     * Worth watching: a number that climbs says the queue is deeper than the service can drain within the deadline, so
+     * either `threads` is too low for the arrival rate or `queueSize` is promising more than it can keep.
+     */
+    def droppedWhileWaiting: Long = staleDrops.get()
+
     def shutdown(): Unit = pool.shutdownNow()
+
+object BoundedExecutor:
+
+    /**
+     * Fails the Future of a task that reached a worker only after its deadline had passed, so it was discarded unrun.
+     *
+     * A subclass of `RejectedExecutionException` because that is exactly what happened — the pool refused the work,
+     * just later than usual. Callers that map rejection to a "busy, try again" response can therefore treat it the same
+     * way they treat a `None` from [[BoundedExecutor.submit]], without caring which side of the queue the refusal came
+     * from.
+     */
+    class StaleWorkException(message: String) extends RejectedExecutionException(message)

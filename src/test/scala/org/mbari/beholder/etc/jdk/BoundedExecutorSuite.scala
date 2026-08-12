@@ -16,6 +16,7 @@
 
 package org.mbari.beholder.etc.jdk
 
+import java.time.Duration
 import java.util.concurrent.{CountDownLatch, Executor, RejectedExecutionException, TimeUnit}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration as ScalaDuration
@@ -27,6 +28,18 @@ class BoundedExecutorSuite extends munit.FunSuite:
 
     /** One worker, room for one more task: the third submission has nowhere to go. */
     private def oneAtATime(): BoundedExecutor = BoundedExecutor("test", threads = 1, queueSize = 1)
+
+    /**
+     * As above, but anything that queues has already missed its deadline by the time a worker looks at it.
+     *
+     * The deadline is set far below the pause each test takes before freeing the worker, so "did it expire?" never
+     * comes down to scheduler luck.
+     */
+    private def deadlineOf(maxWait: Duration): BoundedExecutor =
+        BoundedExecutor("test", threads = 1, queueSize = 1, maxWait = maxWait)
+
+    /** Comfortably longer than the 1ms deadlines below, so a queued task is unambiguously stale. */
+    private def pauseWellPastAnyDeadline(): Unit = Thread.sleep(100)
 
     test("is an Executor, so it can be handed to anything that takes one"):
         val executor = oneAtATime()
@@ -153,6 +166,115 @@ class BoundedExecutorSuite extends munit.FunSuite:
             Await.result(queued, patience)
 
             assert(executor.submit(()).isDefined, "submit should accept work again after the queue drains")
+        finally
+            release.countDown()
+            executor.shutdown()
+
+    /**
+     * The point of the deadline. Nothing cancels a queued capture, so without this a task whose client gave up still
+     * costs a full ffmpeg run when its turn comes, while live requests wait behind it.
+     */
+    test("submit never runs a body that waited past maxWait"):
+        val executor = deadlineOf(Duration.ofMillis(1))
+        val started  = CountDownLatch(1)
+        val release  = CountDownLatch(1)
+        val ranLate  = CountDownLatch(1)
+        try
+            executor
+                .submit { started.countDown(); release.await() }
+                .getOrElse(fail("the first submission should have been accepted"))
+            assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
+
+            val stale = executor
+                .submit(ranLate.countDown())
+                .getOrElse(fail("the second submission should have been queued"))
+
+            pauseWellPastAnyDeadline()
+            release.countDown()
+
+            val thrown = Try(Await.result(stale, patience)).failed.get
+            assert(
+                thrown.isInstanceOf[BoundedExecutor.StaleWorkException],
+                s"Expected the future to fail as stale work, got $thrown"
+            )
+            assertEquals(ranLate.getCount, 1L, "the stale body should never have been run")
+            assertEquals(executor.droppedWhileWaiting, 1L)
+        finally
+            release.countDown()
+            executor.shutdown()
+
+    /**
+     * A stale drop is a refusal, not a failure, and callers already map refusals to "busy, try again". Keeping the
+     * exception under `RejectedExecutionException` is what lets them do that with one branch.
+     */
+    test("stale work is reported as a rejection, so both ways of shedding load look alike"):
+        val executor = deadlineOf(Duration.ofMillis(1))
+        val release  = CountDownLatch(1)
+        val started  = CountDownLatch(1)
+        try
+            executor
+                .submit { started.countDown(); release.await() }
+                .getOrElse(fail("the first submission should have been accepted"))
+            assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
+
+            val stale = executor.submit(()).getOrElse(fail("the second submission should have been queued"))
+            pauseWellPastAnyDeadline()
+            release.countDown()
+
+            val thrown = Try(Await.result(stale, patience)).failed.get
+            assert(
+                thrown.isInstanceOf[RejectedExecutionException],
+                s"Expected a RejectedExecutionException subclass, got ${thrown.getClass.getName}"
+            )
+        finally
+            release.countDown()
+            executor.shutdown()
+
+    test("work that reaches a worker inside maxWait still runs"):
+        val executor = deadlineOf(Duration.ofSeconds(30))
+        try
+            val result = executor.submit(21 * 2).getOrElse(fail("submit should have accepted the work"))
+            assertEquals(Await.result(result, patience), 42)
+            assertEquals(executor.droppedWhileWaiting, 0L)
+        finally executor.shutdown()
+
+    /** The escape hatch: an operator who would rather serve every request late than drop any of them. */
+    test("a maxWait of zero disables the deadline, however long the queue waits"):
+        val executor = deadlineOf(Duration.ZERO)
+        val started  = CountDownLatch(1)
+        val release  = CountDownLatch(1)
+        try
+            executor
+                .submit { started.countDown(); release.await() }
+                .getOrElse(fail("the first submission should have been accepted"))
+            assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
+
+            val queued = executor.submit(21 * 2).getOrElse(fail("the second submission should have been queued"))
+            pauseWellPastAnyDeadline()
+            release.countDown()
+
+            assertEquals(Await.result(queued, patience), 42)
+            assertEquals(executor.droppedWhileWaiting, 0L)
+        finally
+            release.countDown()
+            executor.shutdown()
+
+    /** The default has to stay the old behaviour: a deadline is something a caller opts into. */
+    test("no maxWait means no deadline"):
+        val executor = oneAtATime()
+        val started  = CountDownLatch(1)
+        val release  = CountDownLatch(1)
+        try
+            executor
+                .submit { started.countDown(); release.await() }
+                .getOrElse(fail("the first submission should have been accepted"))
+            assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
+
+            val queued = executor.submit(21 * 2).getOrElse(fail("the second submission should have been queued"))
+            pauseWellPastAnyDeadline()
+            release.countDown()
+
+            assertEquals(Await.result(queued, patience), 42)
         finally
             release.countDown()
             executor.shutdown()

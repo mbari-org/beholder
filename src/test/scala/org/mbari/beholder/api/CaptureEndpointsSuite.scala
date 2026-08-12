@@ -247,3 +247,36 @@ class CaptureEndpointsSuite extends munit.FunSuite:
         finally
             release.countDown()
             busy.shutdown()
+
+    /**
+     * The other half of shedding load. A request accepted into the queue can still turn out to be worthless by the time
+     * a worker frees up, and running it then would spend an ffmpeg slot on a client that has already gone. The endpoint
+     * has to answer 503 for that too — the caller's situation is identical to a full queue, and a 500 would tell them
+     * to report a bug rather than retry.
+     */
+    test("/capture returns 503 when the request waited too long for a worker"):
+        // java.time.Duration, spelled out: this file's bare `Duration` is the scala.concurrent one.
+        val slow    = BoundedExecutor("test-capture", threads = 1, queueSize = 2, maxWait = java.time.Duration.ofMillis(1))
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        try
+            slow.submit { started.countDown(); release.await() }
+            assert(started.await(10, TimeUnit.SECONDS), "the blocking task never started")
+
+            val backedUp = stub(CaptureEndpoints(capture, AppConfig.Api.Key, slow).captureImpl)
+            val req      = CaptureRequest(videoUrl.toExternalForm(), 9876L)
+            val sent     = basicRequest
+                .post(uri"http://test.com/capture")
+                .header("X-Api-Key", AppConfig.Api.Key)
+                .body(req.stringify)
+                .send(backedUp)
+
+            // The request is queued behind the blocked worker. Let its deadline lapse before
+            // freeing the worker, so it is stale by the time one looks at it.
+            Thread.sleep(100)
+            release.countDown()
+
+            assertEquals(await(sent).code.code, 503)
+        finally
+            release.countDown()
+            slow.shutdown()

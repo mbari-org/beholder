@@ -51,6 +51,9 @@ class CaptureEndpoints(
         )
     private val apiKeyHeader  = header[String]("X-Api-Key").description("Required key for access")
 
+    private def atCapacity(advice: String): ErrorMsg =
+        ServiceUnavailable(s"The server is at capture capacity. $advice")
+
     /**
      * Logic for /capture — imageType comes from the request body (defaults to JPEG when absent).
      * @param accurateOpt
@@ -84,11 +87,20 @@ class CaptureEndpoints(
                            )
                 yield (img.path.toFile, img.imageType.mediaType)
 
-            submitted.getOrElse:
-                log.atDebug.log(() => "Refused a capture: the capture pool is saturated")
-                Future.successful(
-                    Left(ServiceUnavailable("The server is at capture capacity. Please retry shortly."))
-                )
+            submitted match
+                case None =>
+                    log.atDebug.log(() => "Refused a capture: the capture pool is saturated")
+                    Future.successful(Left(atCapacity("Please retry shortly.")))
+
+                // The pool took the work but a worker found it stale before running it, so the
+                // client had already been waiting too long to be worth an ffmpeg run. Same 503 as a
+                // full queue — from the caller's side both mean "over capacity, nothing was done" —
+                // but a distinct message, since the two say different things about how to fix it.
+                case Some(capturing) =>
+                    capturing.recover:
+                        case _: BoundedExecutor.StaleWorkException =>
+                            log.atDebug.log(() => "Refused a capture: it waited too long for a worker")
+                            Left(atCapacity("Your request waited too long to start. Please retry shortly."))
 
     // Logic for /capture/jpg and /capture/png — imageType is fixed by the path.
     private def captureLogicHelper(imageType: ImageType)(
@@ -171,4 +183,9 @@ object CaptureEndpoints:
      * matters is how many ffmpeg processes exist, not how many of each URL shape are in flight.
      */
     lazy val defaultExecutor: BoundedExecutor =
-        BoundedExecutor("beholder-capture", AppConfig.Capture.Threads, AppConfig.Capture.QueueSize)
+        BoundedExecutor(
+            "beholder-capture",
+            AppConfig.Capture.Threads,
+            AppConfig.Capture.QueueSize,
+            AppConfig.Capture.MaxWait
+        )

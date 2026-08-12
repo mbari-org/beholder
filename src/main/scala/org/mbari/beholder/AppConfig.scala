@@ -51,6 +51,13 @@ object AppConfig:
                 case configured if configured > 0 => configured
                 case _                            => Threads * 8
 
+        /**
+         * How long a request may wait for a worker before it is discarded rather than run. Unlike the two above, 0 is
+         * not "work it out" but "no deadline" — there is nothing about the machine to derive it from. The right value
+         * comes from how long the callers wait, which only the operator knows.
+         */
+        val MaxWait: Duration = Config.getDuration("beholder.capture.maxwait")
+
     object Ffmpeg:
         val Path: String      = Config.getString("beholder.ffmpeg.path")
         val Timeout: Duration = Config.getDuration("beholder.ffmpeg.timeout")

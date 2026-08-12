@@ -26,7 +26,8 @@ import java.time.Duration
  * An [[Ffprobe]] that memoizes what the underlying probe returns.
  *
  * Probing a remote video costs an HTTP round trip and the answer never changes for a given URI, so it is worth caching.
- * Beholder is long lived, so the cache is bounded by size rather than allowed to grow forever.
+ * Beholder is long lived, so the cache is bounded by size rather than allowed to grow forever. Calls to ffprobe are run
+ * on the calling thread.
  *
  * @param delegate
  *   Does the actual probing
