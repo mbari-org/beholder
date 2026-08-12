@@ -34,8 +34,12 @@ class HealthEndpoints(using ec: ExecutionContext) extends Endpoints:
             .name("beholderHealth")
             .description("Get the health status of the server")
             .tag("health")
-    val defaultImpl: ServerEndpoint[Any, Future]                           =
-        defaultEndpoint.serverLogic(Unit => Future(Right(HealthStatus.default)))
+
+    /**
+     * Move health check off of the main execution context. It doesn't need to be there.
+     */
+    val defaultImpl: ServerEndpoint[Any, Future] =
+        defaultEndpoint.serverLogic(_ => Future.successful(Right(HealthStatus.default)))
 
     def all: List[sttp.tapir.Endpoint[?, ?, ?, ?, ?]]                           = List(defaultEndpoint)
     def allImpl: List[sttp.tapir.server.ServerEndpoint[Any, concurrent.Future]] = List(defaultImpl)
