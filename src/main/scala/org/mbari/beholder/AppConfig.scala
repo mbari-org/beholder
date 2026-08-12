@@ -49,7 +49,7 @@ object AppConfig:
         val QueueSize: Int =
             Config.getInt("beholder.capture.queuesize") match
                 case configured if configured > 0 => configured
-                case _                            => Threads * 32
+                case _                            => Threads * 8
 
         /**
          * How long a request may wait for a worker before it is discarded rather than run. Unlike the two above, 0 is

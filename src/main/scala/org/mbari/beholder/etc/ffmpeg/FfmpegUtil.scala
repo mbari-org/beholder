@@ -88,7 +88,7 @@ object FfmpegUtil:
         val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
 
         Seq(ffmpegExecutable) ++
-            Seq("-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
+            Seq("-threads", "2", "-apply_cropping", "0") ++ // Suppress clap/clean-aperture crop at decoder level; must precede -i
             Seq("-ss", time) ++
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
@@ -118,7 +118,7 @@ object FfmpegUtil:
         val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
 
         Seq(ffmpegExecutable) ++
-            Seq("-apply_cropping", "0") ++  // Suppress clap/clean-aperture crop at decoder level; must precede -i
+            Seq("-threads", "2", "-apply_cropping", "0") ++  // Suppress clap/clean-aperture crop at decoder level; must precede -i
             Seq("-ss", time) ++             // Seek. This needs to be first. If it's after -i the capture is MUCH slower
             Option.when(skipNonKeyFrames)(Seq("-skip_frame", "nokey")).getOrElse(Seq.empty) ++
             Option.when(!accurate)(Seq("-noaccurate_seek")).getOrElse(Seq.empty) ++
