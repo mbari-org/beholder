@@ -16,12 +16,13 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
+import org.mbari.beholder.LoggingFunSuite
 import java.net.URI
 import java.nio.file.Files
 import java.time.Duration
 import org.mbari.beholder.TestUtil
 
-class FfprobeUtilSuite extends munit.FunSuite:
+class FfprobeUtilSuite extends LoggingFunSuite:
 
     test("videoSize reports the size the video declares"):
         assertEquals(FfprobeUtil.videoSize(TestUtil.bigBuckBunny.toURI), Some(VideoSize(1920, 1080)))

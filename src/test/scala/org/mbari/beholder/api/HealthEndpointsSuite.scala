@@ -16,6 +16,7 @@
 
 package org.mbari.beholder.api
 
+import org.mbari.beholder.LoggingFunSuite
 import java.util.concurrent.{RejectedExecutionException, TimeUnit}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -23,7 +24,7 @@ import sttp.client3.*
 import sttp.client3.testing.SttpBackendStub
 import sttp.tapir.server.stub.TapirStubInterpreter
 
-class HealthEndpointsSuite extends munit.FunSuite:
+class HealthEndpointsSuite extends LoggingFunSuite:
 
     private def stub(endpoints: HealthEndpoints): SttpBackend[Future, Any] =
         TapirStubInterpreter(SttpBackendStub.asynchronousFuture)

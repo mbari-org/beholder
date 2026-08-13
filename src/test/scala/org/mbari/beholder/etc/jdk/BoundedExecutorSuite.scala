@@ -16,13 +16,14 @@
 
 package org.mbari.beholder.etc.jdk
 
+import org.mbari.beholder.LoggingFunSuite
 import java.time.Duration
 import java.util.concurrent.{CountDownLatch, Executor, RejectedExecutionException, TimeUnit}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration as ScalaDuration
 import scala.util.Try
 
-class BoundedExecutorSuite extends munit.FunSuite:
+class BoundedExecutorSuite extends LoggingFunSuite:
 
     private val patience = ScalaDuration(10, TimeUnit.SECONDS)
 

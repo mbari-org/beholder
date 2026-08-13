@@ -16,7 +16,7 @@
 
 package org.mbari.beholder
 
-class SanitySuite extends munit.FunSuite:
+class SanitySuite extends LoggingFunSuite:
 
     test("sanity"):
         assertEquals(true, true)

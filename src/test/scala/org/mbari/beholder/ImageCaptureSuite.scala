@@ -25,7 +25,7 @@ import org.junit.Assert.*
 import org.mbari.beholder.etc.ffmpeg.{Ffprobe, FieldOrder, VideoInfo}
 import scala.jdk.CollectionConverters.*
 
-class ImageCaptureSuite extends munit.FunSuite:
+class ImageCaptureSuite extends LoggingFunSuite:
 
     val root    = TestUtil.root
     Files.createDirectories(root)

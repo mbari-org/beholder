@@ -20,7 +20,7 @@ import java.nio.file.Files
 import java.time.Duration
 import org.junit.Assert.*
 
-class ImageCacheImplSuite extends munit.FunSuite:
+class ImageCacheImplSuite extends LoggingFunSuite:
 
     val root     = TestUtil.root
     Files.createDirectories(root)

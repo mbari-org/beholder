@@ -16,11 +16,12 @@
 
 package org.mbari.beholder.etc.jdk
 
+import org.mbari.beholder.LoggingFunSuite
 import java.nio.file.{Files, Path}
 import java.time.Duration
 import java.util.concurrent.TimeoutException
 
-class ProcessRunnerSuite extends munit.FunSuite:
+class ProcessRunnerSuite extends LoggingFunSuite:
 
     private val generous = Duration.ofSeconds(30)
 

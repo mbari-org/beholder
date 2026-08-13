@@ -16,12 +16,13 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
+import org.mbari.beholder.LoggingFunSuite
 import java.net.URI
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import org.mbari.beholder.TestUtil
 
-class FfprobeServiceSuite extends munit.FunSuite:
+class FfprobeServiceSuite extends LoggingFunSuite:
 
     private val uri  = URI.create("file:///does/not/need/to/exist.mp4")
     private val info = VideoInfo(1920, 1080, FieldOrder.Tb)

@@ -16,7 +16,8 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
-class FieldOrderSuite extends munit.FunSuite:
+import org.mbari.beholder.LoggingFunSuite
+class FieldOrderSuite extends LoggingFunSuite:
 
     test("every interlaced field order ffprobe can report is recognized as interlaced"):
         for token <- Seq("tt", "bb", "tb", "bt") do

@@ -16,6 +16,7 @@
 
 package org.mbari.beholder.api
 
+import org.mbari.beholder.LoggingFunSuite
 import org.mbari.beholder.{AppConfig, ImageCacheImpl, ImageCapture, ImageType, TestUtil}
 
 import java.nio.file.Files
@@ -32,7 +33,7 @@ import sttp.client3.*
 import sttp.client3.testing.SttpBackendStub
 import sttp.tapir.server.stub.TapirStubInterpreter
 
-class CaptureEndpointsSuite extends munit.FunSuite:
+class CaptureEndpointsSuite extends LoggingFunSuite:
 
     given ExecutionContextExecutor = ExecutionContext.global
 

@@ -16,6 +16,7 @@
 
 package org.mbari.beholder.etc.ffmpeg
 
+import org.mbari.beholder.LoggingFunSuite
 import java.time.Duration
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -23,7 +24,7 @@ import javax.imageio.ImageIO
 import org.junit.Assert.*
 import org.mbari.beholder.TestUtil
 
-class FfmpegUtilSuite extends munit.FunSuite:
+class FfmpegUtilSuite extends LoggingFunSuite:
 
     private val videoUri = TestUtil.bigBuckBunny.toURI
 

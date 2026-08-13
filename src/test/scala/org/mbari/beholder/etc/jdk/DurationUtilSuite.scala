@@ -16,9 +16,10 @@
 
 package org.mbari.beholder.etc.jdk
 
+import org.mbari.beholder.LoggingFunSuite
 import java.time.Duration
 
-class DurationUtilSuite extends munit.FunSuite:
+class DurationUtilSuite extends LoggingFunSuite:
 
     val h  = 6
     val m  = 5

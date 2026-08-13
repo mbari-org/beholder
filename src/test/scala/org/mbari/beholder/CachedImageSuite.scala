@@ -20,7 +20,7 @@ import java.time.Duration
 import org.junit.Assert.*
 import org.mbari.beholder.etc.jdk.PathUtil
 
-class CachedImageSuite extends munit.FunSuite:
+class CachedImageSuite extends LoggingFunSuite:
 
     test("toPath_jpg"):
         val root     = TestUtil.root

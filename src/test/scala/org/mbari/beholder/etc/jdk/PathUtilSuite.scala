@@ -16,11 +16,12 @@
 
 package org.mbari.beholder.etc.jdk
 
+import org.mbari.beholder.LoggingFunSuite
 import java.nio.file.Paths
 import org.junit.Assert.*
 import java.net.URI
 
-class PathUtilSuite extends munit.FunSuite:
+class PathUtilSuite extends LoggingFunSuite:
 
     test("useExtension"):
         val path    = Paths.get("/Users/brian/foo.jpg")

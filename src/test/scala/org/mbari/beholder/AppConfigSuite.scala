@@ -16,7 +16,7 @@
 
 package org.mbari.beholder
 
-class AppConfigSuite extends munit.FunSuite:
+class AppConfigSuite extends LoggingFunSuite:
 
     /**
      * The capture pool is sized from the CPU count when it is not configured explicitly. A small container is where

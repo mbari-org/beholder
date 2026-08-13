@@ -16,7 +16,8 @@
 
 package org.mbari.beholder.api
 
-class ServiceUnavailableSuite extends munit.FunSuite:
+import org.mbari.beholder.LoggingFunSuite
+class ServiceUnavailableSuite extends LoggingFunSuite:
 
     private val bounds  = ServiceUnavailable.MinRetryAfterSeconds to ServiceUnavailable.MaxRetryAfterSeconds
     private val samples = 200
