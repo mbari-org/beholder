@@ -10,7 +10,7 @@
 
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
     <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-      <pattern>%gray(%d{yyyy-MM-dd HH:mm:ss}) [%green(%-32t)] %highlight(%-5p) %blue(%-50c{50}) | %m%n</pattern>
+      <pattern>%cyan(%date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX", UTC}) [%green(%-32t)] %highlight(%-5p) %blue(%-50c{50}) | %m%n</pattern>
     </encoder>
   </appender>
 

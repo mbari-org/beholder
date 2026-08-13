@@ -15,10 +15,12 @@ versionScheme                 := Some("semver-spec")
 semanticdbEnabled             := true
 semanticdbVersion             := scalafixSemanticdb.revision
 
+Test / fork    := true
 Test / testOptions ++= Seq(
     Tests.Argument(TestFrameworks.MUnit, "--log=debug")
 )
 
+Compile / run / fork := true  
 Compile / doc / scalacOptions ++= Seq(
     "-groups",
     "-project-footer",
@@ -94,7 +96,8 @@ lazy val root = project
             methanol,
             munit           % Test,
             picocli,
-            slf4jJdk        % Runtime,
+            slf4jApi,
+            slf4jJul        % Test,
             tapirStubServer % Test,
             tapirSwagger,
             tapirCirce,

@@ -180,9 +180,10 @@ class BoundedExecutorSuite extends munit.FunSuite:
         val release  = CountDownLatch(1)
         val ranLate  = CountDownLatch(1)
         try
-            executor
-                .submit { started.countDown(); release.await() }
-                .getOrElse(fail("the first submission should have been accepted"))
+            // execute has no deadline check, so the blocker is guaranteed to run regardless of scheduling latency
+            executor.execute: () =>
+                started.countDown()
+                release.await()
             assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
 
             val stale = executor
@@ -212,9 +213,9 @@ class BoundedExecutorSuite extends munit.FunSuite:
         val release  = CountDownLatch(1)
         val started  = CountDownLatch(1)
         try
-            executor
-                .submit { started.countDown(); release.await() }
-                .getOrElse(fail("the first submission should have been accepted"))
+            executor.execute: () =>
+                started.countDown()
+                release.await()
             assert(started.await(10, TimeUnit.SECONDS), "the first task never started")
 
             val stale = executor.submit(()).getOrElse(fail("the second submission should have been queued"))
