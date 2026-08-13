@@ -59,16 +59,12 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
     // Two-level lookup: URI → (CachedImage.cacheKey → CachedImage). O(1) average per level.
     // The inner key is built in exactly one place, CachedImage.cacheKey, so that lookup, store,
     // removal and eviction cannot drift apart.
+    // videoUri -> ((elapsedMs, imageType, deinterlace) -> CachedImage)
     private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType, Boolean), CachedImage]] =
         new ConcurrentHashMap()
 
     // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs, imageType, deinterlace).
-    // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element.
-    //
-    // The tail of this comparison is about identity, not order: a sorted set treats "compares equal" as
-    // "same element", so any two distinct cache entries must differ somewhere in it. Leave deinterlace out
-    // and a frame and its deinterlaced twin created in the same clock tick collide — the second add() is
-    // silently dropped, and that entry then sits on disk forever with its bytes unaccounted for.
+    // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element. 
     private[beholder] val evictionOrdering: java.util.Comparator[CachedImage] = (a: CachedImage, b: CachedImage) =>
         val byTime = a.created.compareTo(b.created)
         if byTime != 0 then byTime

@@ -55,9 +55,6 @@ case class CachedImage(
 
     /**
      * What the cache indexes this image by, within its video.
-     *
-     * Kept in one place so that every lookup, store, removal and eviction keys on the same thing — miss one of them and
-     * an entry becomes unevictable, or a lookup silently returns the wrong variant.
      */
     def cacheKey: (Long, ImageType, Boolean) = (elapsedTime.toMillis, imageType, deinterlace)
 
@@ -66,8 +63,6 @@ object CachedImage:
     /**
      * Marks a cached frame that a deinterlacer was run over, so it cannot be confused with the interlaced capture of
      * the same frame.
-     *
-     * A duration stem is always digits, underscores and a dot, so no ordinary filename can end in this by accident.
      */
     val DeinterlacedSuffix = "_deinterlaced"
 
@@ -120,9 +115,7 @@ object CachedImage:
                         val stem = PathUtil.dropExtension(file)
 
                         // The suffix has to come off *before* the underscores become colons. Leave it on and
-                        // "00_00_01.234_deinterlaced" turns into "00:00:01.234:deinterlaced", which fromHMS reads
-                        // the first three parts of and parses quite happily — so a deinterlaced frame would be
-                        // adopted as an ordinary one on the next restart rather than failing loudly.
+                        // "00_00_01.234_deinterlaced" turns into "00:00:01.234:deinterlaced"
                         val deinterlaced = stem.endsWith(DeinterlacedSuffix)
                         val hms          = (if deinterlaced then stem.dropRight(DeinterlacedSuffix.length) else stem)
                             .replace("_", ":")
@@ -152,7 +145,7 @@ object CachedImage:
         val path = PathUtil.useExtension(fakePath, imageType.extension)
         CachedImage(fakeUrl, elapsedTime, path, imageType = imageType, deinterlace = deinterlace)
 
-    // Only one alternative of an overloaded method may carry defaults, so it goes on the one that gets used.
+    // Only one alternative of an overloaded method may carry defaults
     def fake(uri: URI, elapsedTime: Duration, imageType: ImageType, deinterlace: Boolean = false): CachedImage =
         val path = PathUtil.useExtension(fakePath, imageType.extension)
         CachedImage(uri, elapsedTime, path, imageType = imageType, deinterlace = deinterlace)

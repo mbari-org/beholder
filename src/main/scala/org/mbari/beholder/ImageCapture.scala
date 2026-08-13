@@ -60,7 +60,7 @@ class ImageCapture(
     private val log = System.getLogger(getClass.getName)
 
     /**
-     * Captures currently running, keyed by the file each one is producing.
+     * Captures currently running requests, keyed by the file each one is producing.
      *
      * Without this, a burst of requests for the same frame all miss the cache and all shell out, so the same frame is
      * decoded N times — and, because the target path is derived from the request rather than made unique, N ffmpeg
