@@ -298,3 +298,47 @@ class CaptureEndpointsSuite extends munit.FunSuite:
         finally
             release.countDown()
             slow.shutdown()
+
+    // ---- deinterlace ----
+
+    /** Records what the endpoint asked for, so we can tell the body was actually read. */
+    private class RecordingCapture extends ImageCapture(ImageCacheImpl(root, 3, .3)):
+        val seen = java.util.concurrent.ConcurrentLinkedQueue[Boolean]()
+
+        override def capture(
+            videoUri: java.net.URI,
+            elapsedTime: java.time.Duration,
+            accurate: Boolean,
+            skipNonKeyFrames: Boolean,
+            imageType: ImageType,
+            deinterlace: Boolean
+        ) =
+            seen.add(deinterlace)
+            super.capture(videoUri, elapsedTime, accurate, skipNonKeyFrames, imageType, deinterlace)
+
+    private def deinterlaceSeenBy(body: String, path: String = "capture"): Boolean =
+        val recording = RecordingCapture()
+        val result    = await(
+            basicRequest
+                .post(uri"http://test.com/$path")
+                .header("X-Api-Key", AppConfig.Api.Key)
+                .body(body)
+                .send(stub(CaptureEndpoints(recording, AppConfig.Api.Key).captureImpl))
+        )
+        assertEquals(result.code.code, 200)
+        assertEquals(recording.seen.size(), 1)
+        recording.seen.peek()
+
+    test("/capture reads deinterlace from the request body"):
+        val req = CaptureRequest(videoUrl.toExternalForm(), 3456L, deinterlace = Some(true))
+        assert(deinterlaceSeenBy(req.stringify), "deinterlace=true should reach the capture")
+
+    test("/capture defaults deinterlace to false when the body omits it"):
+        // Deliberately hand-written rather than round-tripped through CaptureRequest: the point is what
+        // happens to a body from an older client that has never heard of this field.
+        val body = s"""{"videoUrl":"${videoUrl.toExternalForm()}","elapsedTimeMillis":4567}"""
+        assert(!deinterlaceSeenBy(body), "an absent flag must not turn deinterlacing on")
+
+    test("/capture accepts deinterlace=false explicitly"):
+        val req = CaptureRequest(videoUrl.toExternalForm(), 5678L, deinterlace = Some(false))
+        assert(!deinterlaceSeenBy(req.stringify))

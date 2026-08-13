@@ -48,6 +48,17 @@ object FfmpegUtil:
         Option(err.getMessage).flatMap(ReservedColorspacePattern.findFirstIn).isDefined
 
     /**
+     * Bob Weaver deinterlacing, the filter half of the `deinterlace` request flag.
+     *
+     * bwdif rather than yadif because we decode exactly one frame per capture, so the filter runs once and its cost
+     * disappears next to the seek and decode around it — there is no quality/speed trade left to make.
+     *
+     * `mode=send_frame` matters. bwdif defaults to `send_field`, which emits one frame per *field*: with `-frames:v 1`
+     * that is twice the filtering for a frame taken at the first field's instant rather than the frame's.
+     */
+    private val DeinterlaceFilter = "bwdif=mode=send_frame:parity=auto:deint=all"
+
+    /**
      * Build the `-vf` argument shared by every output format.
      *
      * `-apply_cropping 0` is what stops the decoder honoring a MOV clean aperture (clap) atom, but ffmpeg has only one
@@ -59,11 +70,16 @@ object FfmpegUtil:
      * So we suppress cropping in the decoder and reinstate just the codec's crop here, using the size ffprobe reports
      * (which ignores the clap). `min()` keeps this safe if the decoded frame is ever smaller than the probe claims: the
      * crop clamps instead of failing.
+     *
+     * The crop comes before the deinterlacer so bwdif never interpolates against the macroblock padding rows. Cropping
+     * cannot upset the field parity here because the offset is 0:0 — only the bottom of the frame moves.
      */
-    private def buildVideoFilters(videoUri: URI, overrideColorspace: Boolean): Seq[String] =
+    private def buildVideoFilters(videoUri: URI, overrideColorspace: Boolean, deinterlace: Boolean): Seq[String] =
         val cropFilter = ffprobe
             .videoSize(videoUri)
             .map(size => s"crop=min(iw\\,${size.width}):min(ih\\,${size.height}):0:0")
+
+        val deinterlaceFilter = Option.when(deinterlace)(DeinterlaceFilter)
 
         // colorspace=iall=bt709 is a no-op for YUV→YUV same-csp paths and does
         // not update the filter-link prim/trc, so swscaler still sees reserved.
@@ -71,7 +87,7 @@ object FfmpegUtil:
         // colorspace filter to run properly and sets prim:bt709 on the link.
         val colorspaceFilter = Option.when(overrideColorspace)("colorspace=iall=bt709:all=bt709,format=rgb24")
 
-        val filters = (cropFilter ++ colorspaceFilter).toSeq
+        val filters = (cropFilter ++ deinterlaceFilter ++ colorspaceFilter).toSeq
         if filters.isEmpty then Seq.empty
         else Seq("-vf", filters.mkString(","))
 
@@ -81,11 +97,12 @@ object FfmpegUtil:
         target: Path,
         accurate: Boolean = true,
         skipNonKeyFrames: Boolean = false,
-        overrideColorspace: Boolean = false
+        overrideColorspace: Boolean = false,
+        deinterlace: Boolean = false
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
-        val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
+        val vfArgs = buildVideoFilters(videoUri, overrideColorspace, deinterlace)
 
         Seq(ffmpegExecutable) ++
             Seq(
@@ -116,11 +133,12 @@ object FfmpegUtil:
         target: Path,
         accurate: Boolean = true,
         skipNonKeyFrames: Boolean = false,
-        overrideColorspace: Boolean = false
+        overrideColorspace: Boolean = false,
+        deinterlace: Boolean = false
     ): Seq[String] =
         val time = DurationUtil.toHMS(elapsedTime)
 
-        val vfArgs = buildVideoFilters(videoUri, overrideColorspace)
+        val vfArgs = buildVideoFilters(videoUri, overrideColorspace, deinterlace)
 
         Seq(ffmpegExecutable) ++
             Seq(
@@ -207,6 +225,11 @@ object FfmpegUtil:
      *   The location to save the image to
      * @param accurate
      *   By default ffmpeg will return "frame accutrate" capture. If you want the nearest preceding keyframe, use false
+     * @param deinterlace
+     *   Run a deinterlacer over the frame. Taken literally: this applies the filter whether or not the video is
+     *   interlaced, and whether or not `skipNonKeyFrames` is set. Deciding *whether* a capture should be deinterlaced
+     *   is [[org.mbari.beholder.ImageCapture]]'s job, because it is the same decision that names the cache file — split
+     *   it across both and a frame can end up filed under a name that misdescribes it.
      */
     def frameCapture(
         videoUri: URI,
@@ -214,14 +237,31 @@ object FfmpegUtil:
         target: Path,
         accurate: Boolean = true,
         skipNonKeyFrames: Boolean = false,
-        timeout: Duration = AppConfig.Ffmpeg.Timeout
+        timeout: Duration = AppConfig.Ffmpeg.Timeout,
+        deinterlace: Boolean = false
     ): Either[Throwable, Path] =
         def buildCmd(overrideColorspace: Boolean): Seq[String] =
             ImageType.fromPath(target) match
                 case Some(ImageType.Jpeg) =>
-                    buildJpegCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames, overrideColorspace)
+                    buildJpegCommand(
+                        videoUri,
+                        elapsedTime,
+                        target,
+                        accurate,
+                        skipNonKeyFrames,
+                        overrideColorspace,
+                        deinterlace
+                    )
                 case Some(ImageType.Png)  =>
-                    buildPngCommand(videoUri, elapsedTime, target, accurate, skipNonKeyFrames, overrideColorspace)
+                    buildPngCommand(
+                        videoUri,
+                        elapsedTime,
+                        target,
+                        accurate,
+                        skipNonKeyFrames,
+                        overrideColorspace,
+                        deinterlace
+                    )
                 case _                    => Seq.empty
 
         val cmd = buildCmd(overrideColorspace = false)

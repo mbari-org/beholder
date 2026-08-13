@@ -26,8 +26,21 @@ class FfprobeUtilSuite extends munit.FunSuite:
     test("videoSize reports the size the video declares"):
         assertEquals(FfprobeUtil.videoSize(TestUtil.bigBuckBunny.toURI), Some(VideoSize(1920, 1080)))
 
+    test("probe reports the size and the field order together"):
+        assertEquals(
+            FfprobeUtil.probe(TestUtil.bigBuckBunny.toURI),
+            Some(VideoInfo(1920, 1080, FieldOrder.Progressive))
+        )
+
+    test("a progressive video is not reported as interlaced"):
+        assert(!FfprobeUtil.isInterlaced(TestUtil.bigBuckBunny.toURI))
+
     test("videoSize is None for a video that does not exist"):
         assertEquals(FfprobeUtil.videoSize(URI.create("file:///no/such/video.mp4")), None)
+
+    /** An unprobeable video must not be deinterlaced on spec. */
+    test("a video that cannot be probed is not reported as interlaced"):
+        assert(!FfprobeUtil.isInterlaced(URI.create("file:///no/such/video.mp4")))
 
     test("videoSize is None for a file that exists but is not a video"):
         val notAVideo = Files.createTempFile("beholder_not_a_video_", ".txt")

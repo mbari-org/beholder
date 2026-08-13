@@ -40,7 +40,7 @@ class FfprobeUtil(timeout: Duration = AppConfig.Ffprobe.Timeout) extends Ffprobe
     /** Not a cache. Throttles the log so a missing ffprobe doesn't warn on every single capture. */
     private val warnedMissingFfprobe = AtomicBoolean(false)
 
-    override def videoSize(videoUri: URI): Option[VideoSize] =
+    override def probe(videoUri: URI): Option[VideoInfo] =
         val cmd = Seq(
             ffprobeExecutable,
             "-v",
@@ -48,7 +48,7 @@ class FfprobeUtil(timeout: Duration = AppConfig.Ffprobe.Timeout) extends Ffprobe
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=width,height",
+            "stream=width,height,field_order",
             "-of",
             "csv=p=0",
             videoUri.toString
@@ -86,14 +86,23 @@ class FfprobeUtil(timeout: Duration = AppConfig.Ffprobe.Timeout) extends Ffprobe
                         )
                 None
 
-    private def parse(csv: String): Option[VideoSize] =
+    /**
+     * Parse `width,height,field_order`, e.g. `1920,1080,tb`.
+     *
+     * The field order is optional in a way the size is not: a stream that does not declare one still gives us a usable
+     * crop, so a missing third column degrades to [[FieldOrder.Unknown]] rather than failing the whole probe. `split`
+     * drops trailing empty fields, so that case arrives here as a two element array.
+     */
+    private def parse(csv: String): Option[VideoInfo] =
         csv.linesIterator
             .map(_.trim)
             .filter(_.nonEmpty)
             .nextOption()
             .map(_.split(","))
-            .collect { case Array(w, h) => (w.trim.toIntOption, h.trim.toIntOption) }
-            .collect { case (Some(w), Some(h)) if w > 0 && h > 0 => VideoSize(w, h) }
+            .collect:
+                case Array(w, h)    => (w.trim.toIntOption, h.trim.toIntOption, FieldOrder.Unknown)
+                case Array(w, h, f) => (w.trim.toIntOption, h.trim.toIntOption, FieldOrder.parse(f))
+            .collect { case (Some(w), Some(h), fieldOrder) if w > 0 && h > 0 => VideoInfo(w, h, fieldOrder) }
 
 /** The configured instance. [[FfprobeService.default]] wraps this one in its cache. */
 object FfprobeUtil extends FfprobeUtil(AppConfig.Ffprobe.Timeout)

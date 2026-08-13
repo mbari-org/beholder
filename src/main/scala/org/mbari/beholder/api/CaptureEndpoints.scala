@@ -85,7 +85,8 @@ class CaptureEndpoints(
                                captureRequest.elapsedTime,
                                accurateOpt.getOrElse(true),
                                nokeyOpt.getOrElse(false),
-                               captureRequest.imageType.getOrElse(ImageType.Jpeg)
+                               captureRequest.imageType.getOrElse(ImageType.Jpeg),
+                               captureRequest.deinterlace.getOrElse(false)
                            )
                 yield (img.path.toFile, img.imageType.mediaType)
 
@@ -126,7 +127,8 @@ class CaptureEndpoints(
             .name("capture")
             .description(
                 "Capture a frame from a video at a given elapsed time or pull it from the cache if it exists. " +
-                    "Include imageType (either jpg or png) in the request body to select the format; defaults to \"jpg\"."
+                    "Include imageType (either jpg or png) in the request body to select the format; defaults to \"jpg\". " +
+                    CaptureEndpoints.DeinterlaceDescription
             )
             .summary("Frame capture from a video")
             .tag("capture")
@@ -142,7 +144,8 @@ class CaptureEndpoints(
             .out(fileBody and header("Content-Type", "image/jpeg"))
             .name("capture-jpg")
             .description(
-                "Capture a JPEG frame from a video at a given elapsed time or pull it from the cache if it exists"
+                "Capture a JPEG frame from a video at a given elapsed time or pull it from the cache if it exists. " +
+                    CaptureEndpoints.DeinterlaceDescription
             )
             .summary("Frame capture as JPEG from a video")
             .tag("capture")
@@ -158,7 +161,8 @@ class CaptureEndpoints(
             .out(fileBody and header("Content-Type", "image/png"))
             .name("capture-png")
             .description(
-                "Capture a PNG frame from a video at a given elapsed time or pull it from the cache if it exists"
+                "Capture a PNG frame from a video at a given elapsed time or pull it from the cache if it exists. " +
+                    CaptureEndpoints.DeinterlaceDescription
             )
             .summary("Frame capture as PNG from a video")
             .tag("capture")
@@ -179,6 +183,11 @@ class CaptureEndpoints(
         List(captureImpl, captureJpgImpl, capturePngImpl)
 
 object CaptureEndpoints:
+
+    /** Shared by all three capture endpoints, since the flag behaves identically on each. */
+    val DeinterlaceDescription: String =
+        "Set deinterlace=true in the request body to deinterlace interlaced source video. It has no effect on " +
+            "progressive video, and is ignored when nokey=true."
 
     /**
      * The pool the running service captures with. Shared across the three capture endpoints on purpose: the limit that

@@ -101,11 +101,27 @@ object PathUtil:
      * val u = PathUtil.toURL(root, p)
      * // http://m3.shore.mbari.org/videos/M3/proxy/DocRicketts/2022/03/1429/D1429_20220317T195416Z_h264.mp4
      * }}}
+     *
+     * Both paths are normalized to absolute first, exactly as [[isChild]] does. The two have to agree: `relativize`
+     * refuses to mix a relative path with an absolute one, so without this a relative root makes `isChild` say the file
+     * is under the root and then makes this throw working out where.
+     *
+     * The mix is easy to produce. `toPath` always returns an absolute path while nothing normalizes the cache root —
+     * beholder takes `<cacheRoot>` straight off the command line — so any caller holding a path from one and a root
+     * from the other hits it. `ImageCache.put(uri, elapsedTime, path)` is exactly that shape.
+     *
+     * `ImageCacheImpl.scanCache` is *not*, as it happens: `Files.walkFileTree` on a relative root hands back relative
+     * paths, so both sides match and it works either way. Worth knowing before assuming this only matters on startup.
      */
     def fromPath(root: Path, path: Path): Option[URL] =
         if isChild(root, path) then
-            val raw     = root.relativize(path)
-            val host    = raw.subpath(0, 1).toString
-            val urlPath = raw.subpath(1, raw.getNameCount).toString
-            Some(URI.create(s"http://$host/$urlPath").toURL)
+            val raw = root.toAbsolutePath.normalize().relativize(path.toAbsolutePath.normalize())
+            // Needs a host *and* a path to name a URL. The root itself relativizes to the empty path
+            // (one empty name), and a bare `<root>/<host>` has nothing after the host — both used to
+            // reach subpath(1, 1), which throws rather than returning "not a cache entry".
+            if raw.getNameCount < 2 then None
+            else
+                val host    = raw.subpath(0, 1).toString
+                val urlPath = raw.subpath(1, raw.getNameCount).toString
+                Some(URI.create(s"http://$host/$urlPath").toURL)
         else None
