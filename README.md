@@ -46,6 +46,7 @@ Capture a frame from a video at the given elapsed time. Returns the image direct
 | `videoUrl` | Yes | URL of the video file |
 | `elapsedTimeMillis` | Yes | Elapsed time in milliseconds |
 | `imageType` | No | `"jpg"` or `"png"` (default: `"jpg"`) |
+| `deinterlace` | No | Deinterlace interlaced source video (default: `false`) |
 
 ```json
 {
@@ -57,6 +58,22 @@ Capture a frame from a video at the given elapsed time. Returns the image direct
 
 > [!IMPORTANT]
 > PNGs are considerably larger than JPEGs and will increase latency as well as reduce the number of images that can be stored in cache.
+
+**Deinterlacing**
+
+Set `deinterlace: true` to remove the combing artifacts you get when grabbing a still from interlaced video. Beholder checks the video's field order with `ffprobe` first, so the flag only costs anything when it will actually do something:
+
+- Progressive video is captured exactly as it would be without the flag, and shares the same cache entry.
+- It is **ignored when `nokey=true`** — under that mode ffmpeg only hands the deinterlacer keyframes, which are too far apart for it to produce a good result.
+- Deinterlaced frames are cached separately from ordinary ones, so a given frame can be held both ways.
+
+```bash
+curl -X POST http://localhost:8080/capture \
+  -H "X-Api-Key: foo" \
+  -H "Content-Type: application/json" \
+  -d '{"videoUrl":"http://example.com/interlaced.mp4","elapsedTimeMillis":1234,"deinterlace":true}' \
+  --output frame.jpg
+```
 
 **Example — JPEG (default)**
 

@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-package org.mbari.beholder.etc.jdk
+package org.mbari.beholder
 
-import org.mbari.beholder.LoggingFunSuite
-import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
+import org.slf4j.bridge.SLF4JBridgeHandler
 
-class DurationUtilSuite extends LoggingFunSuite:
+trait LoggingFunSuite extends munit.FunSuite:
+    LoggingFunSuite.install()
 
-    val h  = 6
-    val m  = 5
-    val ms = math.round(4.321 * 1000)
-    val d  = Duration.ofMillis(ms).plusHours(h).plusMinutes(m)
+object LoggingFunSuite:
+    private val installed = AtomicBoolean(false)
 
-    test("toHMS"):
-        val hms = DurationUtil.toHMS(d)
-        assertEquals(hms, "06:05:04.321")
-
-    test("fromHMS"):
-        val t = DurationUtil.fromHMS(DurationUtil.toHMS(d))
-        assertEquals(t, d)
+    private def install(): Unit =
+        if installed.compareAndSet(false, true) then
+            SLF4JBridgeHandler.removeHandlersForRootLogger()
+            SLF4JBridgeHandler.install()

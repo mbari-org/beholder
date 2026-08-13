@@ -25,8 +25,17 @@ import java.net.URI
 
 /**
  * Case class for deserializing a capture requests JSON body
+ *
+ * @param deinterlace
+ *   Ask for the frame to be deinterlaced. Only has an effect when the video actually is interlaced — a progressive
+ *   video is captured exactly as it would be without the flag. Ignored when the `nokey` query parameter is set.
  */
-final case class CaptureRequest(videoUrl: String, elapsedTimeMillis: Long, imageType: Option[ImageType] = Some(ImageType.Jpeg)):
+final case class CaptureRequest(
+    videoUrl: String,
+    elapsedTimeMillis: Long,
+    imageType: Option[ImageType] = Some(ImageType.Jpeg),
+    deinterlace: Option[Boolean] = Some(false)
+):
     lazy val elapsedTime: Duration      = Duration.ofMillis(elapsedTimeMillis)
     lazy val uri: Either[ErrorMsg, URI] = Try(URI.create(videoUrl)) match
         case scala.util.Failure(_) => Left(NotFound(s"$videoUrl is not a valid URL"))

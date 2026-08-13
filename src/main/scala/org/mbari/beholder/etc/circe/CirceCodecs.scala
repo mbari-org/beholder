@@ -21,7 +21,7 @@ import io.circe.generic.semiauto.*
 import scala.util.Try
 import java.net.URL
 import org.mbari.beholder.util.HexUtil
-import org.mbari.beholder.api.{NotFound, ServerError, StatusMsg, Unauthorized}
+import org.mbari.beholder.api.{NotFound, ServerError, ServiceUnavailable, StatusMsg, Unauthorized}
 import org.mbari.beholder.api.CaptureRequest
 import org.mbari.beholder.api.HealthStatus
 import org.mbari.beholder.ImageType
@@ -58,10 +58,15 @@ object CirceCodecs:
     given Decoder[Unauthorized] = deriveDecoder
     given Encoder[Unauthorized] = deriveEncoder
 
-    given Decoder[ImageType] = Decoder.decodeString.emap:
-        case "jpg" | "jpeg" => Right(ImageType.Jpeg)
-        case "png"          => Right(ImageType.Png)
-        case other          => Left(s"Unknown image type: $other. Expected jpg, jpeg, or png")
+    given Decoder[ServiceUnavailable] = deriveDecoder
+    given Encoder[ServiceUnavailable] = deriveEncoder
+
+    given Decoder[ImageType] = Decoder
+        .decodeString
+        .emap:
+            case "jpg" | "jpeg" => Right(ImageType.Jpeg)
+            case "png"          => Right(ImageType.Png)
+            case other          => Left(s"Unknown image type: $other. Expected jpg, jpeg, or png")
 
     given Encoder[ImageType] = Encoder.encodeString.contramap(_.extension.stripPrefix("."))
 

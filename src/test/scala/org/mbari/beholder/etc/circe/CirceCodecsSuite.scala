@@ -16,11 +16,12 @@
 
 package org.mbari.beholder.etc.circe
 
+import org.mbari.beholder.LoggingFunSuite
 import io.circe.parser.decode
 import org.mbari.beholder.ImageType
 import org.mbari.beholder.etc.circe.CirceCodecs.{*, given}
 
-class CirceCodecsSuite extends munit.FunSuite:
+class CirceCodecsSuite extends LoggingFunSuite:
 
     // ---- ImageType decoder ----
 

@@ -14,22 +14,9 @@
  * limitations under the License.
  */
 
-package org.mbari.beholder.etc.jdk
+package org.mbari.beholder.etc.slf4j
 
-import org.mbari.beholder.LoggingFunSuite
-import java.time.Duration
+class Slf4jLoggerFinder extends System.LoggerFinder:
+    override def getLogger(name: String, module: Module): System.Logger =
+        new Slf4jLogger(name)
 
-class DurationUtilSuite extends LoggingFunSuite:
-
-    val h  = 6
-    val m  = 5
-    val ms = math.round(4.321 * 1000)
-    val d  = Duration.ofMillis(ms).plusHours(h).plusMinutes(m)
-
-    test("toHMS"):
-        val hms = DurationUtil.toHMS(d)
-        assertEquals(hms, "06:05:04.321")
-
-    test("fromHMS"):
-        val t = DurationUtil.fromHMS(DurationUtil.toHMS(d))
-        assertEquals(t, d)

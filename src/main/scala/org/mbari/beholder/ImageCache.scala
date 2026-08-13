@@ -54,19 +54,32 @@ trait ImageCache:
 
     // -------------------------------
 
-    def get(uri: URI, elapsedTime: DurationString, imageType: ImageType): Option[CachedImage] =
+    def get(
+        uri: URI,
+        elapsedTime: DurationString,
+        imageType: ImageType,
+        deinterlace: Boolean
+    ): Option[CachedImage] =
         DurationString.unapply(elapsedTime) match
             case None      => None
-            case Some(dur) => get(uri, dur, imageType)
+            case Some(dur) => get(uri, dur, imageType, deinterlace)
 
     /**
      * @param uri
      *   The video URL
      * @param elapsedTime
      *   The elapsed time into the video
+     * @param deinterlace
+     *   Whether the wanted frame is the deinterlaced variant. Deinterlaced frames are separate cache entries, so this
+     *   has to match what was stored or the lookup misses.
      */
-    def get(uri: URI, elapsedTime: Duration, imageType: ImageType): Option[CachedImage] =
-        get(CachedImage.fake(uri, elapsedTime, imageType))
+    def get(
+        uri: URI,
+        elapsedTime: Duration,
+        imageType: ImageType,
+        deinterlace: Boolean = false
+    ): Option[CachedImage] =
+        get(CachedImage.fake(uri, elapsedTime, imageType, deinterlace))
 
     /**
      * Store a cachedImage in the cache

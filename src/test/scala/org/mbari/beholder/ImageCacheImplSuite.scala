@@ -20,7 +20,7 @@ import java.nio.file.Files
 import java.time.Duration
 import org.junit.Assert.*
 
-class ImageCacheImplSuite extends munit.FunSuite:
+class ImageCacheImplSuite extends LoggingFunSuite:
 
     val root     = TestUtil.root
     Files.createDirectories(root)
@@ -34,10 +34,10 @@ class ImageCacheImplSuite extends munit.FunSuite:
      */
     def isEqual(a: CachedImage, b: CachedImage): Boolean =
         a.elapsedTime == b.elapsedTime &&
-        a.path == b.path &&
-        a.sizeBytes == b.sizeBytes &&
-        a.videoUri == b.videoUri &&
-        a.imageType == b.imageType
+            a.path == b.path &&
+            a.sizeBytes == b.sizeBytes &&
+            a.videoUri == b.videoUri &&
+            a.imageType == b.imageType
 
     // ---- JPEG tests ----
 
@@ -84,9 +84,9 @@ class ImageCacheImplSuite extends munit.FunSuite:
                 CachedImage(videoUri, elapsedTime, path, sizeBytes = Some(1000000))
         jpegs.foreach(cache.put)
         // After 4 × 1 MB puts into a 3 MB cache (clearPct = 0.3), the oldest should be gone
-        val head = cache.get(jpegs.head)
+        val head  = cache.get(jpegs.head)
         assertTrue(head.isEmpty)
-        val last = cache.get(jpegs.last)
+        val last  = cache.get(jpegs.last)
         assertTrue(last.isDefined)
         cache.clearCache()
 
@@ -125,7 +125,8 @@ class ImageCacheImplSuite extends munit.FunSuite:
     test("put and get (png)"):
         val cache = ImageCacheImpl(root, 3, .3)
         val path  = root.resolve(s"${getClass.getSimpleName}_put_get.png").toAbsolutePath().normalize()
-        val png   = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png   =
+            CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
 
         val png1 = cache.put(png)
         assertTrue(isEqual(png1, png))
@@ -146,8 +147,10 @@ class ImageCacheImplSuite extends munit.FunSuite:
     test("remove (png)"):
         val cache = ImageCacheImpl(root, 3, .3)
         val path  = root.resolve(s"${getClass.getSimpleName}_remove.png").toAbsolutePath().normalize()
-        val png   = CachedImage(videoUri, Duration.ofMillis(750), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
-        val png1  = CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png   =
+            CachedImage(videoUri, Duration.ofMillis(750), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
+        val png1  =
+            CachedImage(videoUri, Duration.ofMillis(250), path, sizeBytes = Some(1000000), imageType = ImageType.Png)
         cache.put(png)
         cache.put(png1)
         assertTrue(cache.get(png).isDefined)
@@ -166,9 +169,9 @@ class ImageCacheImplSuite extends munit.FunSuite:
                 CachedImage(videoUri, elapsedTime, path, sizeBytes = Some(1000000), imageType = ImageType.Png)
         pngs.foreach(cache.put)
         // After 4 × 1 MB puts into a 3 MB cache (clearPct = 0.3), the oldest should be gone
-        val head = cache.get(pngs.head)
+        val head  = cache.get(pngs.head)
         assertTrue(head.isEmpty)
-        val last = cache.get(pngs.last)
+        val last  = cache.get(pngs.last)
         assertTrue(last.isDefined)
         cache.clearCache()
 
@@ -215,9 +218,108 @@ class ImageCacheImplSuite extends munit.FunSuite:
         assertEquals(cache.totalImages, 1)
         cache.clearCache()
 
+    test("same key different deinterlace"):
+        // A frame and its deinterlaced twin at identical (videoUri, elapsedTime, imageType) are different
+        // pixels, so they must be independent cache entries.
+        val cache     = ImageCacheImpl(root, 100, .3)
+        val elapsed   = Duration.ofMillis(500)
+        val plainPath = root.resolve(s"${getClass.getSimpleName}_di.jpg").toAbsolutePath().normalize()
+        val deintPath = root.resolve(s"${getClass.getSimpleName}_di_deinterlaced.jpg").toAbsolutePath().normalize()
+        val plain     = CachedImage(videoUri, elapsed, plainPath, sizeBytes = Some(100))
+        val deint     =
+            CachedImage(videoUri, elapsed, deintPath, sizeBytes = Some(200), deinterlace = true)
+
+        cache.put(plain)
+        cache.put(deint)
+        assertEquals(cache.totalImages, 2)
+
+        assertEquals(cache.get(plain).map(_.path), Some(plainPath))
+        assertEquals(cache.get(deint).map(_.path), Some(deintPath))
+
+        // Removing one must not disturb the other
+        cache.remove(deint)
+        assertTrue(cache.get(deint).isEmpty)
+        assertTrue(cache.get(plain).isDefined)
+        assertEquals(cache.totalImages, 1)
+        cache.clearCache()
+
+    /**
+     * The eviction queue is a ConcurrentSkipListSet, so its comparator doubles as its equality: two entries that
+     * compare 0 are one element. If a frame and its deinterlaced twin collide, the second add() is silently dropped,
+     * that file is never evicted, and its bytes stay on the books forever.
+     *
+     * This asserts on the comparator rather than going through put(), which stamps created = Instant.now() and so
+     * essentially never produces a tie. The ties happen on restart: scanCache restores created from the filesystem's
+     * creation timestamp, whose resolution is far coarser than the gap between two captures of the same frame.
+     */
+    test("the eviction ordering never calls two distinct cache entries equal"):
+        val cache     = ImageCacheImpl(root, 100, .3)
+        val elapsed   = Duration.ofMillis(500)
+        val created   = java.time.Instant.parse("2026-08-12T00:00:00Z")
+        val plainPath = root.resolve(s"${getClass.getSimpleName}_tie.jpg").toAbsolutePath().normalize()
+        val deintPath = root.resolve(s"${getClass.getSimpleName}_tie_deinterlaced.jpg").toAbsolutePath().normalize()
+        val plain     = CachedImage(videoUri, elapsed, plainPath, created, Some(100))
+        val deint     = CachedImage(videoUri, elapsed, deintPath, created, Some(100), deinterlace = true)
+
+        assertNotEquals(
+            0,
+            cache.evictionOrdering.compare(plain, deint),
+            "a frame and its deinterlaced twin must be two elements of the eviction queue, not one"
+        )
+        assertEquals(
+            cache.evictionOrdering.compare(plain, deint),
+            -cache.evictionOrdering.compare(deint, plain),
+            "the ordering must stay antisymmetric"
+        )
+        assertEquals(cache.evictionOrdering.compare(plain, plain), 0)
+
+    /**
+     * `<cacheRoot>` comes off the command line and nothing normalizes it, while `CachedImage.toPath` always builds
+     * absolute paths. The two have to be able to meet.
+     */
+    // An http URI, because PathUtil rebuilds URLs as http:// — a file: URI cannot round-trip through the
+    // cache path and would make these tests fail for a reason that has nothing to do with the root.
+    private val httpVideoUri = java.net.URI.create("http://example.org/videos/M3/foo_h264.mp4")
+
+    /**
+     * This one passes with or without the normalization in `PathUtil.fromPath`, because `Files.walkFileTree` on a
+     * relative root yields relative paths and so never mixes the two. It is here to pin that down: the interesting case
+     * is the next test, and it would be easy to assume startup was the exposure.
+     */
+    test("scanCache rebuilds the index from a relative cache root"):
+        val relativeRoot = java.nio.file.Paths.get("target", s"${getClass.getSimpleName}_relative_root")
+        val image        = CachedImage.toPath(relativeRoot, httpVideoUri, Duration.ofMillis(1234))
+        try
+            Files.createDirectories(image.path.getParent)
+            Files.write(image.path, Array.fill[Byte](64)(0))
+
+            val cache = ImageCacheImpl(relativeRoot, 100, .3) // the constructor runs scanCache
+            assertEquals(cache.totalImages, 1, "the frame on disk should have been picked up")
+            assertTrue("the rebuilt entry should be findable", cache.get(image).isDefined)
+        finally
+            Files.deleteIfExists(image.path)
+            ImageCacheImpl(relativeRoot, 100, .3).clearCache()
+
+    /** The same, but reached the way a caller holding an absolute path would reach it. */
+    test("an absolute path resolves against a relative cache root"):
+        val relativeRoot = java.nio.file.Paths.get("target", s"${getClass.getSimpleName}_relative_abs")
+        val image        = CachedImage.toPath(relativeRoot, httpVideoUri, Duration.ofMillis(1234))
+        try
+            Files.createDirectories(image.path.getParent)
+            Files.write(image.path, Array.fill[Byte](64)(0))
+
+            val cache = ImageCacheImpl(relativeRoot, 100, .3)
+            assertTrue(
+                "putting an absolute path under a relative root should work",
+                cache.put(httpVideoUri, Duration.ofMillis(1234), image.path).isDefined
+            )
+        finally
+            Files.deleteIfExists(image.path)
+            ImageCacheImpl(relativeRoot, 100, .3).clearCache()
+
     test("totalImages (mixed types)"):
-        val cache   = ImageCacheImpl(root, 100, .3)
-        val elapsed = Duration.ofMillis(1000)
+        val cache    = ImageCacheImpl(root, 100, .3)
+        val elapsed  = Duration.ofMillis(1000)
         val jpegPath = root.resolve(s"${getClass.getSimpleName}_total_mixed.jpg").toAbsolutePath().normalize()
         val pngPath  = root.resolve(s"${getClass.getSimpleName}_total_mixed.png").toAbsolutePath().normalize()
         val jpeg     = CachedImage(videoUri, elapsed, jpegPath, sizeBytes = Some(100))

@@ -21,11 +21,13 @@ import org.mbari.beholder.AppConfig
 
 import java.net.URI
 import java.time.Duration
+
 /**
  * An [[Ffprobe]] that memoizes what the underlying probe returns.
  *
  * Probing a remote video costs an HTTP round trip and the answer never changes for a given URI, so it is worth caching.
- * Beholder is long lived, so the cache is bounded by size rather than allowed to grow forever.
+ * Beholder is long lived, so the cache is bounded by size rather than allowed to grow forever. Calls to ffprobe are run
+ * on the calling thread.
  *
  * @param delegate
  *   Does the actual probing
@@ -38,12 +40,12 @@ class FfprobeService(
     accessTimeout: Duration = AppConfig.Ffprobe.Cache.Expire
 ) extends Ffprobe:
 
-    private val cache: Cache[URI, VideoSize] =
+    private val cache: Cache[URI, VideoInfo] =
         Caffeine
             .newBuilder()
             .maximumSize(maximumSize)
             .expireAfterAccess(accessTimeout)
-            .build[URI, VideoSize]()
+            .build[URI, VideoInfo]()
 
     /**
      * Caffeine runs the loader at most once per key even under concurrent calls, so several simultaneous captures from
@@ -52,8 +54,8 @@ class FfprobeService(
      * A failed probe returns null from the loader, which Caffeine declines to store. That is deliberate: a video that
      * is briefly unreachable gets probed again next time rather than being remembered as unprobeable.
      */
-    override def videoSize(videoUri: URI): Option[VideoSize] =
-        Option(cache.get(videoUri, (uri: URI) => delegate.videoSize(uri).orNull))
+    override def probe(videoUri: URI): Option[VideoInfo] =
+        Option(cache.get(videoUri, (uri: URI) => delegate.probe(uri).orNull))
 
     /** The number of videos currently remembered. Approximate: Caffeine evicts asynchronously. */
     def estimatedSize: Long = cache.estimatedSize()
