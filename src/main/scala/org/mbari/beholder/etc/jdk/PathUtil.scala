@@ -114,6 +114,6 @@ object PathUtil:
             if raw.getNameCount < 2 then None
             else
                 val host    = raw.subpath(0, 1).toString
-                val urlPath = raw.subpath(1, raw.getNameCount).toString
+                val urlPath = raw.subpath(1, raw.getNameCount).toString.replace(java.io.File.separatorChar, '/')
                 Some(URI.create(s"http://$host/$urlPath").toURL)
         else None
