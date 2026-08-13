@@ -22,8 +22,8 @@ import scala.util.Using
 
 object TestUtil:
 
-    val bigBuckBunny: URL =
-        val url = getClass.getResource("/Big_Buck_Bunny_1080_10s_1MB.mp4")
+    private def testVideo(resource: String): URL =
+        val url = getClass.getResource(resource)
         // sbt 2 packs test resources into a JAR, giving a jar: URL that ffmpeg can't read.
         // Extract to a temp file so callers always get a file: URL.
         if url.getProtocol == "jar" then
@@ -35,5 +35,22 @@ object TestUtil:
                 throw new RuntimeException(s"Failed to extract test video from ${url.toString}")
             tmp.toUri.toURL
         else url
+
+    /** 1920x1080, progressive. */
+    val bigBuckBunny: URL = testVideo("/Big_Buck_Bunny_1080_10s_1MB.mp4")
+
+    /**
+     * 720x480, genuinely interlaced (`field_order=tt`), one second, encoded with a short GOP so that captures using
+     * `skipNonKeyFrames` still find a keyframe.
+     *
+     * Built from [[bigBuckBunny]] with ffmpeg's `interlace` filter:
+     * {{{
+     * ffmpeg -i Big_Buck_Bunny_1080_10s_1MB.mp4 \
+     *   -vf "scale=720:480,interlace=scan=tff:lowpass=0" \
+     *   -flags +ilme+ildct -c:v libx264 -x264opts tff=1 -g 8 -crf 28 -preset veryslow -an -t 1.0 \
+     *   Interlaced_720x480_1s.mp4
+     * }}}
+     */
+    val interlaced: URL = testVideo("/Interlaced_720x480_1s.mp4")
 
     val root: Path = Paths.get("target", "test_cache")

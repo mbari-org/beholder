@@ -22,6 +22,8 @@ import java.time.Duration
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.*
+import org.mbari.beholder.etc.ffmpeg.{Ffprobe, FieldOrder, VideoInfo}
+import scala.jdk.CollectionConverters.*
 
 class ImageCaptureSuite extends munit.FunSuite:
 
@@ -50,17 +52,33 @@ class ImageCaptureSuite extends munit.FunSuite:
     private val videoUri = URI.create("file:///videos/coalesce-me.mp4")
 
     /** A fresh cache per test, so nothing another test left on disk can decide the outcome. */
-    private def freshCapture(grabber: FrameGrabber): ImageCapture =
+    private def freshCapture(grabber: FrameGrabber, ffprobe: Ffprobe = neverInterlaced): ImageCapture =
         val tempRoot = Files.createTempDirectory("beholder_coalesce_")
         tempRoot.toFile.deleteOnExit()
-        ImageCapture(ImageCacheImpl(tempRoot, 100, .3), grabber)
+        ImageCapture(ImageCacheImpl(tempRoot, 100, .3), grabber, ffprobe)
 
     /** Stands in for ffmpeg: counts its calls, and is slow enough that callers genuinely overlap. */
     private def countingGrabber(counter: AtomicInteger, result: Path => Either[Throwable, Path]): FrameGrabber =
-        (_, _, target, _, _) =>
+        (_, _, target, _, _, _) =>
             counter.incrementAndGet()
             Thread.sleep(300)
             result(target)
+
+    /** Stands in for ffprobe, and counts how many times it was consulted. */
+    private class FakeFfprobe(fieldOrder: FieldOrder) extends Ffprobe:
+        val calls = AtomicInteger(0)
+
+        override def probe(videoUri: URI): Option[VideoInfo] =
+            calls.incrementAndGet()
+            Some(VideoInfo(1920, 1080, fieldOrder))
+
+    private def neverInterlaced: Ffprobe = FakeFfprobe(FieldOrder.Progressive)
+
+    /** Records the deinterlace flag each capture was actually run with. */
+    private def recordingGrabber(seen: java.util.concurrent.ConcurrentLinkedQueue[Boolean]): FrameGrabber =
+        (_, _, target, _, _, deinterlace) =>
+            seen.add(deinterlace)
+            writeAFrame(target)
 
     private def writeAFrame(target: Path): Either[Throwable, Path] =
         Files.createDirectories(target.getParent)
@@ -124,3 +142,86 @@ class ImageCaptureSuite extends munit.FunSuite:
         assertTrue("second attempt should fail", theCapture.capture(videoUri, Duration.ofMillis(20000)).isLeft)
 
         assertEquals(grabs.get(), 2, "a later request must retry rather than reuse the failed attempt")
+
+    // ---- deinterlacing ----
+
+    private def deinterlaceFlagsOf(
+        ffprobe: Ffprobe
+    )(request: ImageCapture => Either[api.ErrorMsg, CachedImage]): (Seq[Boolean], Seq[CachedImage]) =
+        val seen       = java.util.concurrent.ConcurrentLinkedQueue[Boolean]()
+        val theCapture = freshCapture(recordingGrabber(seen), ffprobe)
+        val result     = request(theCapture)
+        assertTrue(s"capture should have succeeded, got $result", result.isRight)
+        (seen.asScala.toSeq, result.toSeq)
+
+    test("an interlaced video asked to be deinterlaced is deinterlaced, and filed as such"):
+        val (flags, images) = deinterlaceFlagsOf(FakeFfprobe(FieldOrder.Tb)):
+            _.capture(videoUri, Duration.ofMillis(1000), deinterlace = true)
+        assertEquals(flags, Seq(true), "ffmpeg should have been asked to deinterlace")
+        assertTrue(images.head.deinterlace)
+        assertTrue(
+            s"${images.head.path} should be marked deinterlaced",
+            images.head.path.getFileName.toString.endsWith("_deinterlaced.jpg")
+        )
+
+    /**
+     * Deinterlacing a progressive video produces the same pixels as not deinterlacing it, so the request resolves to
+     * false and the frame shares the ordinary entry rather than being duplicated under another name.
+     */
+    test("a progressive video asked to be deinterlaced is captured normally"):
+        val (flags, images) = deinterlaceFlagsOf(FakeFfprobe(FieldOrder.Progressive)):
+            _.capture(videoUri, Duration.ofMillis(1000), deinterlace = true)
+        assertEquals(flags, Seq(false), "there is nothing to deinterlace")
+        assertTrue(!images.head.deinterlace)
+        assertEquals(images.head.path.getFileName.toString, "00_00_01.000.jpg")
+
+    test("a video that cannot be probed is captured normally"):
+        val unprobeable     = new Ffprobe:
+            override def probe(videoUri: URI): Option[VideoInfo] = None
+        val (flags, images) = deinterlaceFlagsOf(unprobeable):
+            _.capture(videoUri, Duration.ofMillis(1000), deinterlace = true)
+        assertEquals(flags, Seq(false), "an unprobeable video must not be deinterlaced on spec")
+        assertTrue(!images.head.deinterlace)
+
+    /** The frames a deinterlacer would see under nokey are whole keyframes apart, so the result is not worth having. */
+    test("nokey suppresses deinterlacing, without even probing"):
+        val probe           = FakeFfprobe(FieldOrder.Tb)
+        val (flags, images) = deinterlaceFlagsOf(probe):
+            _.capture(videoUri, Duration.ofMillis(1000), skipNonKeyFrames = true, deinterlace = true)
+        assertEquals(flags, Seq(false), "nokey wins over a deinterlace request")
+        assertTrue(!images.head.deinterlace)
+        assertEquals(probe.calls.get(), 0, "a request that cannot be deinterlaced should not pay for a probe")
+
+    test("not asking for deinterlacing costs no probe at all"):
+        val probe      = FakeFfprobe(FieldOrder.Tb)
+        val (flags, _) = deinterlaceFlagsOf(probe)(_.capture(videoUri, Duration.ofMillis(1000)))
+        assertEquals(flags, Seq(false))
+        assertEquals(probe.calls.get(), 0, "the default path must not have gained an ffprobe call")
+
+    test("the deinterlaced and ordinary captures of one frame are separate cache entries"):
+        val seen       = java.util.concurrent.ConcurrentLinkedQueue[Boolean]()
+        val theCapture = freshCapture(recordingGrabber(seen), FakeFfprobe(FieldOrder.Tb))
+        val elapsed    = Duration.ofMillis(2000)
+
+        val plain = theCapture.capture(videoUri, elapsed)
+        val deint = theCapture.capture(videoUri, elapsed, deinterlace = true)
+
+        assertEquals(seen.asScala.toSeq, Seq(false, true), "each variant needs its own capture")
+        assertNotEquals(plain.map(_.path), deint.map(_.path))
+
+        // ...and each is served from the cache on a second ask, without another capture
+        theCapture.capture(videoUri, elapsed)
+        theCapture.capture(videoUri, elapsed, deinterlace = true)
+        assertEquals(seen.size(), 2, "both variants should now be cached")
+
+    /** Coalescing keys on the target path, so it must not merge two requests that produce different pixels. */
+    test("concurrent requests differing only in deinterlace are not coalesced together"):
+        val grabs      = AtomicInteger(0)
+        val theCapture = freshCapture(countingGrabber(grabs, writeAFrame), FakeFfprobe(FieldOrder.Tb))
+
+        val results = captureConcurrently(12): i =>
+            theCapture.capture(videoUri, Duration.ofMillis(25000), deinterlace = i % 2 == 0)
+
+        assertEquals(grabs.get(), 2, "one capture per variant, not one for all twelve")
+        assertTrue(s"Every caller should get an image, got $results", results.forall(_.isRight))
+        assertEquals(results.map(_.map(_.path)).distinct.size, 2, "callers should get the variant they asked for")

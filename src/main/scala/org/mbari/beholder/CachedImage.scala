@@ -37,6 +37,10 @@ import java.net.URI
  *   When the jpeg was created. Used by the cache to determine which items to drop.
  * @param sizeBytes
  *   The size of the jpeg file in bytes
+ * @param deinterlace
+ *   Whether a deinterlacer was actually run over this frame. This is the *effective* flag, not what the request asked
+ *   for: a progressive video captured with `deinterlace=true` is stored here as false, because the pixels are identical
+ *   to an ordinary capture and there is nothing to be gained by holding two copies of them.
  */
 case class CachedImage(
     videoUri: URI,
@@ -44,11 +48,23 @@ case class CachedImage(
     path: Path,
     created: Instant = Instant.now(),
     sizeBytes: Option[Long] = None,
-    imageType: ImageType = ImageType.Jpeg
+    imageType: ImageType = ImageType.Jpeg,
+    deinterlace: Boolean = false
 ):
     val sizeMB: Option[Double] = sizeBytes.map(NumberUtil.byteToMB)
 
+    /**
+     * What the cache indexes this image by, within its video.
+     */
+    def cacheKey: (Long, ImageType, Boolean) = (elapsedTime.toMillis, imageType, deinterlace)
+
 object CachedImage:
+
+    /**
+     * Marks a cached frame that a deinterlacer was run over, so it cannot be confused with the interlaced capture of
+     * the same frame.
+     */
+    val DeinterlacedSuffix = "_deinterlaced"
 
     /**
      * Generates cachedImage info
@@ -58,14 +74,24 @@ object CachedImage:
      *   The video url
      * @param elapsedTime
      *   The elapsed tie into the video
+     * @param deinterlace
+     *   Whether a deinterlacer was run over the frame. Deinterlaced frames live beside their interlaced counterparts
+     *   under a [[DeinterlacedSuffix]]-marked name, so that asking for one never returns the other.
      * @return
      *   The cachedImage info
      */
-    def toPath(root: Path, uri: URI, elapsedTime: Duration, imageType: ImageType = Jpeg): CachedImage =
-        val filename = DurationUtil.toHMS(elapsedTime).replace(":", "_") + imageType.extension
+    def toPath(
+        root: Path,
+        uri: URI,
+        elapsedTime: Duration,
+        imageType: ImageType = Jpeg,
+        deinterlace: Boolean = false
+    ): CachedImage =
+        val suffix   = if deinterlace then DeinterlacedSuffix else ""
+        val filename = DurationUtil.toHMS(elapsedTime).replace(":", "_") + suffix + imageType.extension
         val parent   = PathUtil.toPath(root, uri.toURL)
         val path     = parent.resolve(filename)
-        CachedImage(uri, elapsedTime, path, imageType = imageType)
+        CachedImage(uri, elapsedTime, path, imageType = imageType, deinterlace = deinterlace)
 
     /**
      * Generates cachedImage info
@@ -86,10 +112,24 @@ object CachedImage:
                 PathUtil
                     .fromPath(root, parent)
                     .map(videoUrl =>
-                        val filename    = PathUtil.dropExtension(file).replace("_", ":")
-                        val elapsedTime = DurationUtil.fromHMS(filename)
+                        val stem = PathUtil.dropExtension(file)
+
+                        // The suffix has to come off *before* the underscores become colons. Leave it on and
+                        // "00_00_01.234_deinterlaced" turns into "00:00:01.234:deinterlaced"
+                        val deinterlaced = stem.endsWith(DeinterlacedSuffix)
+                        val hms          = (if deinterlaced then stem.dropRight(DeinterlacedSuffix.length) else stem)
+                            .replace("_", ":")
+
+                        val elapsedTime = DurationUtil.fromHMS(hms)
                         val size        = if Files.isRegularFile(file) then Some(Files.size(file)) else None
-                        CachedImage(videoUrl.toURI, elapsedTime, file, sizeBytes = size, imageType = imageType)
+                        CachedImage(
+                            videoUrl.toURI,
+                            elapsedTime,
+                            file,
+                            sizeBytes = size,
+                            imageType = imageType,
+                            deinterlace = deinterlaced
+                        )
                     )
             )
         else None
@@ -101,10 +141,11 @@ object CachedImage:
      * Constructs a fake/mock jpeg that is useful for searchies
      * @param elapsedTime
      */
-    def fake(elapsedTime: Duration, imageType: ImageType): CachedImage =
+    def fake(elapsedTime: Duration, imageType: ImageType, deinterlace: Boolean): CachedImage =
         val path = PathUtil.useExtension(fakePath, imageType.extension)
-        CachedImage(fakeUrl, elapsedTime, path, imageType = imageType)
+        CachedImage(fakeUrl, elapsedTime, path, imageType = imageType, deinterlace = deinterlace)
 
-    def fake(uri: URI, elapsedTime: Duration, imageType: ImageType): CachedImage =
+    // Only one alternative of an overloaded method may carry defaults
+    def fake(uri: URI, elapsedTime: Duration, imageType: ImageType, deinterlace: Boolean = false): CachedImage =
         val path = PathUtil.useExtension(fakePath, imageType.extension)
-        CachedImage(uri, elapsedTime, path, imageType = imageType)
+        CachedImage(uri, elapsedTime, path, imageType = imageType, deinterlace = deinterlace)

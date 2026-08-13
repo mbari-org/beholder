@@ -56,13 +56,16 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
 
     private val log = System.getLogger(getClass.getName)
 
-    // Two-level lookup: URI → ((elapsedTimeMillis, ImageType) → CachedImage). O(1) average per level.
-    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType), CachedImage]] =
+    // Two-level lookup: URI → (CachedImage.cacheKey → CachedImage). O(1) average per level.
+    // The inner key is built in exactly one place, CachedImage.cacheKey, so that lookup, store,
+    // removal and eviction cannot drift apart.
+    // videoUri -> ((elapsedMs, imageType, deinterlace) -> CachedImage)
+    private val index: ConcurrentHashMap[URI, ConcurrentHashMap[(Long, ImageType, Boolean), CachedImage]] =
         new ConcurrentHashMap()
 
-    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs, imageType).
-    // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element.
-    private val evictionOrdering: java.util.Comparator[CachedImage] = (a: CachedImage, b: CachedImage) =>
+    // Eviction queue ordered oldest-first by (created, videoUri, elapsedMs, imageType, deinterlace).
+    // ConcurrentSkipListSet.pollFirst() atomically removes and returns the head element. 
+    private[beholder] val evictionOrdering: java.util.Comparator[CachedImage] = (a: CachedImage, b: CachedImage) =>
         val byTime = a.created.compareTo(b.created)
         if byTime != 0 then byTime
         else
@@ -71,7 +74,10 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
             else
                 val byElapsedTIme = java.lang.Long.compare(a.elapsedTime.toMillis, b.elapsedTime.toMillis)
                 if byElapsedTIme != 0 then byElapsedTIme
-                else a.imageType.evictionOrder.compareTo(b.imageType.evictionOrder)
+                else
+                    val byImageType = a.imageType.evictionOrder.compareTo(b.imageType.evictionOrder)
+                    if byImageType != 0 then byImageType
+                    else a.deinterlace.compareTo(b.deinterlace)
 
     private val evictionQueue: ConcurrentSkipListSet[CachedImage] =
         new ConcurrentSkipListSet[CachedImage](evictionOrdering)
@@ -89,7 +95,7 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
 
     def get(jpeg: CachedImage): Option[CachedImage] =
         Option(index.get(jpeg.videoUri))
-            .flatMap(m => Option(m.get((jpeg.elapsedTime.toMillis, jpeg.imageType))))
+            .flatMap(m => Option(m.get(jpeg.cacheKey)))
 
     /**
      * Store a image in the cache. Stamps the creation time as now, then triggers eviction if total size exceeds the
@@ -102,8 +108,8 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
         val stamped = cachedImage.copy(created = Instant.now())
         val timeMap = index.computeIfAbsent(stamped.videoUri, _ => new ConcurrentHashMap())
 
-        // If this (uri, elapsedTime, imageType) already exists, withdraw the old entry's accounting.
-        val old = timeMap.put((stamped.elapsedTime.toMillis, stamped.imageType), stamped)
+        // If this (uri, elapsedTime, imageType, deinterlace) already exists, withdraw the old entry's accounting.
+        val old = timeMap.put(stamped.cacheKey, stamped)
         if old != null then
             evictionQueue.remove(old)
             totalBytes.addAndGet(-old.sizeBytes.getOrElse(0L))
@@ -115,7 +121,7 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
 
     def remove(cachedImage: CachedImage): Option[CachedImage] =
         Option(index.get(cachedImage.videoUri)).flatMap { timeMap =>
-            Option(timeMap.remove((cachedImage.elapsedTime.toMillis, cachedImage.imageType))).map { img =>
+            Option(timeMap.remove(cachedImage.cacheKey)).map { img =>
                 evictionQueue.remove(img)
                 totalBytes.addAndGet(-img.sizeBytes.getOrElse(0L))
                 img
@@ -136,7 +142,7 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
                 var cachedImage = Option(evictionQueue.pollFirst())
                 while cachedImage.isDefined && freedBytes < targetFreeBytes do
                     val j = cachedImage.get
-                    Option(index.get(j.videoUri)).foreach(_.remove((j.elapsedTime.toMillis, j.imageType)))
+                    Option(index.get(j.videoUri)).foreach(_.remove(j.cacheKey))
                     freedBytes += j.sizeBytes.getOrElse(0L)
                     toDelete += j
                     cachedImage =
@@ -176,7 +182,7 @@ class ImageCacheImpl(val root: Path, maxCacheSizeMB: Double, cacheClearPct: Doub
                 CachedImage.fromPath(root, file).foreach { jpeg =>
                     val timed   = jpeg.copy(created = attrs.creationTime().toInstant)
                     val timeMap = index.computeIfAbsent(timed.videoUri, _ => new ConcurrentHashMap())
-                    timeMap.put((timed.elapsedTime.toMillis, timed.imageType), timed)
+                    timeMap.put(timed.cacheKey, timed)
                     evictionQueue.add(timed)
                     totalBytes.addAndGet(timed.sizeBytes.getOrElse(0L))
                 }
