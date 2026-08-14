@@ -184,5 +184,10 @@ object Main:
             val attach = interpreter.blockingRoute(endpoint)
             attach(router)
 
-        server.exceptionHandler(e => log.atWarn.log(s"Unhandled server exception: ${e.getMessage}"))
+        server.exceptionHandler: e =>
+            val msg = e.getMessage
+            // These are expected connection noise, not application errors.
+            if msg != null && (msg.contains("Connection reset") || msg.contains("Line Feed must be preceded by Carriage Return"))
+            then log.atDebug.withCause(e).log(s"Connection-level exception (ignored): $msg")
+            else log.atWarn.withCause(e).log(s"Unhandled server exception: $msg")
         Await.result(server.requestHandler(router).listen(port).asScala, Duration.Inf)
