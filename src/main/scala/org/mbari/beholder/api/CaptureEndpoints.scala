@@ -77,33 +77,40 @@ class CaptureEndpoints(
         // not be able to consume capture capacity.
         if apiKey != xApiKey then Future.successful(Left(Unauthorized("Invalid X-Api-Key")))
         else
-            val submitted = captureExecutor.submit:
-                for
-                    url <- captureRequest.uri
-                    img <- imageCapture.capture(
-                               url,
-                               captureRequest.elapsedTime,
-                               accurateOpt.getOrElse(true),
-                               nokeyOpt.getOrElse(false),
-                               captureRequest.imageType.getOrElse(ImageType.Jpeg),
-                               captureRequest.deinterlace.getOrElse(false)
-                           )
-                yield (img.path.toFile, img.imageType.mediaType)
+            captureRequest.uri match
+                case Left(err)  => Future.successful(Left(err))
+                case Right(url) =>
+                    val imageType   = captureRequest.imageType.getOrElse(ImageType.Jpeg)
+                    val deinterlace = captureRequest.deinterlace.getOrElse(false)
+                    imageCapture.findInCache(url, captureRequest.elapsedTime, imageType, deinterlace) match
+                        case Some(img) =>
+                            Future.successful(Right((img.path.toFile, img.imageType.mediaType)))
+                        case None      =>
+                            val submitted = captureExecutor.submit:
+                                for img <- imageCapture.capture(
+                                               url,
+                                               captureRequest.elapsedTime,
+                                               accurateOpt.getOrElse(true),
+                                               nokeyOpt.getOrElse(false),
+                                               imageType,
+                                               deinterlace
+                                           )
+                                yield (img.path.toFile, img.imageType.mediaType)
 
-            submitted match
-                case None =>
-                    log.atDebug.log(() => "Refused a capture: the capture pool is saturated")
-                    Future.successful(Left(atCapacity("Please retry shortly.")))
+                            submitted match
+                                case None =>
+                                    log.atDebug.log(() => "Refused a capture: the capture pool is saturated")
+                                    Future.successful(Left(atCapacity("Please retry shortly.")))
 
-                // The pool took the work but a worker found it stale before running it, so the
-                // client had already been waiting too long to be worth an ffmpeg run. Same 503 as a
-                // full queue — from the caller's side both mean "over capacity, nothing was done" —
-                // but a distinct message, since the two say different things about how to fix it.
-                case Some(capturing) =>
-                    capturing.recover:
-                        case _: BoundedExecutor.StaleWorkException =>
-                            log.atDebug.log(() => "Refused a capture: it waited too long for a worker")
-                            Left(atCapacity("Your request waited too long to start. Please retry shortly."))
+                                // The pool took the work but a worker found it stale before running it, so the
+                                // client had already been waiting too long to be worth an ffmpeg run. Same 503 as a
+                                // full queue — from the caller's side both mean "over capacity, nothing was done" —
+                                // but a distinct message, since the two say different things about how to fix it.
+                                case Some(capturing) =>
+                                    capturing.recover:
+                                        case _: BoundedExecutor.StaleWorkException =>
+                                            log.atDebug.log(() => "Refused a capture: it waited too long for a worker")
+                                            Left(atCapacity("Your request waited too long to start. Please retry shortly."))
 
     // Logic for /capture/jpg and /capture/png — imageType is fixed by the path.
     private def captureLogicHelper(imageType: ImageType)(

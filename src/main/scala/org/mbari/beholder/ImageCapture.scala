@@ -222,6 +222,14 @@ class ImageCapture(
                         Left(StatusMsg(s"Failed to capture frame from $videoUri at $elapsedTime", 500))
                     case Success(value)     => Right(value)
 
+    def findInCache(
+        videoUri: URI,
+        elapsedTime: Duration,
+        imageType: ImageType,
+        deinterlace: Boolean
+    ): Option[CachedImage] =
+        cache.get(videoUri, elapsedTime, imageType, deinterlace)
+
 object ImageCapture:
 
     /**
