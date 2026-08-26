@@ -29,6 +29,7 @@ import sttp.tapir.server.vertx.VertxFutureServerInterpreter.*
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.Callable
+import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
 
@@ -126,13 +127,36 @@ object Main:
         // Suppress "Unhandled exception in router" for any route failure that
         // has no specific handler (e.g. 404s from unmatched routes, or exceptions
         // thrown by Tapir endpoint logic).
+        //
+        // A client that hangs up mid-capture is not a server error, but it arrives here
+        // disguised as one. Vert.x writes a sendFile response head with a null promise
+        // (Http1ServerResponse:517); when the outbound queue is already closed, the dispose
+        // calls cancel (Http1ServerConnection:277), which fails that null promise and throws
+        // NullPointerException instead of the CLOSED_EXCEPTION it meant to. Tapir turns that
+        // into rc.fail and it lands here looking like a 500. sendFile is what tapir's fileBody
+        // uses, so every /capture* response goes through it. Unchanged in vert.x 5.1.6, so
+        // this classification is not waiting on an upgrade.
+        //
+        // Counted rather than logged: the stack trace is the same one every time, while the
+        // count is the only measure of how much capture work is being spent on closed sockets.
+        // A number that climbs means clients are giving up before we answer -- look at the
+        // capture queue's drain time and at any proxy read timeout in front of us.
+        val abandonedResponses = AtomicLong(0)
+
         router
             .route()
             .failureHandler: ctx =>
-                val status = if ctx.statusCode() > 0 then ctx.statusCode() else 500
-                val cause  = ctx.failure()
-                if cause != null then log.atWarn.withCause(cause).log(s"Route failure: status=$status")
-                if !ctx.response().ended() then ctx.response().setStatusCode(status).end()
+                // Tested before the status is read: sendFile has already written the response
+                // head by the time it fails, so setStatusCode below would throw on top of the
+                // original failure rather than sending anything.
+                if ctx.response().closed() then
+                    val n = abandonedResponses.incrementAndGet()
+                    log.atDebug.log(() => s"Client closed the connection before the response was written (total: $n)")
+                else
+                    val status = if ctx.statusCode() > 0 then ctx.statusCode() else 500
+                    val cause  = ctx.failure()
+                    if cause != null then log.atWarn.withCause(cause).log(s"Route failure: status=$status")
+                    if !ctx.response().ended() then ctx.response().setStatusCode(status).end()
 
         // Add CORS
         val corsHandler = CorsHandler
