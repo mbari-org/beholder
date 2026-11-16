@@ -30,7 +30,8 @@ object AppConfig:
     val Description: String = "Framegrab server"
 
     val Version: String =
-        Try(getClass.getPackage.getImplementationVersion).getOrElse("0.0.0-SNAPSHOT")
+        // getImplementationVersion returns null (it doesn't throw) when there's no jar manifest, e.g. under tests
+        Try(Option(getClass.getPackage.getImplementationVersion)).toOption.flatten.getOrElse("0.0.0-SNAPSHOT")
 
     object Api:
         val Key: String = Config.getString("beholder.api.key")
