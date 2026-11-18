@@ -14,6 +14,8 @@ startYear                     := Some(2022)
 versionScheme                 := Some("semver-spec")
 semanticdbEnabled             := true
 semanticdbVersion             := scalafixSemanticdb.revision
+// Mitigation for CVE-2026-114938 (Java4Shell): disable the vulnerable Base64 intrinsic
+Universal / javaOptions += "-J-XX:-UseBASE64Intrinsics"
 
 Test / fork    := true
 Test / testOptions ++= Seq(
