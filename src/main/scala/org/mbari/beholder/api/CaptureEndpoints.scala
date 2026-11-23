@@ -84,8 +84,10 @@ class CaptureEndpoints(
                     val deinterlace = captureRequest.deinterlace.getOrElse(false)
                     imageCapture.findInCache(url, captureRequest.elapsedTime, imageType, deinterlace) match
                         case Some(img) =>
+                            // Fast Path: the image is already in the cache
                             Future.successful(Right((img.path.toFile, img.imageType.mediaType)))
                         case None      =>
+                            // Slow Path; Capture using ffmpeg.
                             val submitted = captureExecutor.submit:
                                 for img <- imageCapture.capture(
                                                url,
