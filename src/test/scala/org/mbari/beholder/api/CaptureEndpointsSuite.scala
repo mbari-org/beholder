@@ -300,6 +300,70 @@ class CaptureEndpointsSuite extends LoggingFunSuite:
             release.countDown()
             slow.shutdown()
 
+    // ---- client disconnect ----
+
+    /**
+     * Nothing cancels a running capture, so a request whose client gave up while it sat in the queue would otherwise
+     * cost a full ffmpeg run to produce a frame for a closed socket. `RecordingCapture` is what makes that observable:
+     * the assertion is that `capture` was never reached, not merely that the response was an error.
+     *
+     * `clientGone` is injected rather than faked at the Vert.x level because the stub interpreter has no
+     * `RoutingContext` at all -- which is also why the default reports every stubbed request as still connected, and
+     * why the other tests in this file are unaffected by any of this.
+     */
+    test("/capture skips the ffmpeg run when the client has already disconnected"):
+        val recording = RecordingCapture()
+        val endpoints = CaptureEndpoints(recording, AppConfig.Api.Key, clientGone = _ => true)
+        val req       = CaptureRequest(videoUrl.toExternalForm(), 5678L)
+        val result    = await(
+            basicRequest
+                .post(uri"http://test.com/capture")
+                .header("X-Api-Key", AppConfig.Api.Key)
+                .body(req.stringify)
+                .send(stub(endpoints.captureImpl))
+        )
+        assertEquals(recording.seen.size(), 0, "a disconnected client must not cost an ffmpeg run")
+        assertEquals(endpoints.clientGoneSkips, 1L)
+        assertEquals(result.code.code, 500)
+
+    /** The other half of the pin: the skip has to be the disconnect talking, not the endpoint refusing everything. */
+    test("/capture still captures when the client is connected"):
+        val recording = RecordingCapture()
+        val endpoints = CaptureEndpoints(recording, AppConfig.Api.Key, clientGone = _ => false)
+        val req       = CaptureRequest(videoUrl.toExternalForm(), 6789L)
+        val result    = await(
+            basicRequest
+                .post(uri"http://test.com/capture")
+                .header("X-Api-Key", AppConfig.Api.Key)
+                .body(req.stringify)
+                .send(stub(endpoints.captureImpl))
+        )
+        assertEquals(recording.seen.size(), 1)
+        assertEquals(endpoints.clientGoneSkips, 0L)
+        assertEquals(result.code.code, 200)
+
+    /**
+     * The check belongs behind the pool, not in front of it: a frame already on disk costs nothing to serve, and
+     * answering 500 for one because the connection looks closed would turn a free hit into a lie.
+     */
+    test("/capture serves a cached frame even when the client looks gone"):
+        val recording                 = RecordingCapture()
+        val warm                      = CaptureEndpoints(recording, AppConfig.Api.Key, clientGone = _ => false)
+        val req                       = CaptureRequest(videoUrl.toExternalForm(), 7890L)
+        val body                      = req.stringify
+        def post(e: CaptureEndpoints) = await(
+            basicRequest
+                .post(uri"http://test.com/capture")
+                .header("X-Api-Key", AppConfig.Api.Key)
+                .body(body)
+                .send(stub(e.captureImpl))
+        )
+        assertEquals(post(warm).code.code, 200)
+
+        val gone = CaptureEndpoints(recording, AppConfig.Api.Key, clientGone = _ => true)
+        assertEquals(post(gone).code.code, 200)
+        assertEquals(gone.clientGoneSkips, 0L, "a cache hit never reaches the pool, so it never checks")
+
     // ---- deinterlace ----
 
     /** Records what the endpoint asked for, so we can tell the body was actually read. */

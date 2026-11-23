@@ -9,11 +9,13 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 licenses                      := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0.html")))
 organization                  := "org.mbari"
 organizationName              := "MBARI"
-scalaVersion                  := "3.8.4"
+scalaVersion                  := "3.10.1"
 startYear                     := Some(2022)
 versionScheme                 := Some("semver-spec")
 semanticdbEnabled             := true
 semanticdbVersion             := scalafixSemanticdb.revision
+// Mitigation for CVE-2026-114938 (Java4Shell): disable the vulnerable Base64 intrinsic
+Universal / javaOptions += "-J-XX:-UseBASE64Intrinsics"
 
 Test / fork    := true
 Test / testOptions ++= Seq(
