@@ -36,7 +36,7 @@ sbt laikaSite        # Build documentation to target/docs/site/
 - **`Main`** — Entry point using picocli. Wires up Vert.x HTTP server with Tapir endpoints. Accepts `<cacheRoot>` as a required positional arg, plus optional flags for port, cache size, free percent, and API key.
 - **`AppConfig`** — Reads Typesafe Config (`reference.conf`). All settings overridable via environment variables.
 - **`JpegCapture`** — Orchestrates capture: checks cache first, calls ffmpeg on miss.
-- **`JpegCache`** — In-memory concurrent cache (`ConcurrentHashMap[URL, Vector[Jpeg]]`) backed by disk. Auto-scans disk on startup to rebuild state after restarts. Evicts oldest entries (by creation time) when disk usage exceeds limit.
+- **`JpegCache`** — In-memory concurrent cache (`ConcurrentHashMap[URL, Vector[Jpeg]]`) backed by disk. Auto-scans disk on startup to rebuild state after restarts. Evicts least-recently-used entries when disk usage exceeds limit: every cache hit `touch`es its entry, refreshing `created` (in memory only — after a restart, ages come from file creation times).
 - **`Jpeg`** — Data model for a cached frame. Cache path is derived from video URL + elapsed time: `<root>/<host>/<url-path>/<hh_mm_ss.sss>.jpg`, with a `_deinterlaced` suffix on the stem when a deinterlacer was run.
 - **`FfmpegUtil`** — Shells out to `ffmpeg` for frame extraction. Supports accurate (slow) vs. keyframe (fast) seeking modes, and optional deinterlacing. It takes `deinterlace` **literally** — deciding whether a capture should be deinterlaced is `ImageCapture`'s job, because that same decision names the cache file.
 - **`Ffprobe`** — Trait for inspecting a video before capture. Returns a `VideoInfo` (size + `FieldOrder`) from a single call. Needed because `FfmpegUtil` passes `-apply_cropping 0` to ignore MOV clean-aperture (clap) atoms, which also disables the codec's own crop; the probed size is used to crop off H.264/HEVC macroblock padding (the green band at 1088 instead of 1080). The field order is what drives deinterlacing — see "Deinterlacing" below.
@@ -92,6 +92,20 @@ Two things to preserve if you touch it:
 - `work` runs *outside* the map, never inside `computeIfAbsent`. That method holds a bin lock for the duration of its mapping function, which would stall unrelated captures hashing to the same bin for as long as an ffmpeg run.
 
 `ImageCapture` takes an injectable `FrameGrabber` (defaulting to `FfmpegUtil.frameCapture`) so this is testable without real ffmpeg runs — same pattern as `FfprobeService` taking its delegate.
+
+### Eviction and stale index entries
+
+`ImageCacheImpl.freeDisk` removes evicted entries from the index **synchronously** but deletes their files **asynchronously** on `ImageCacheImpl.defaultDeleter` (one daemon thread). An eviction pass at production sizes is tens of thousands of deletes, and `freeDisk` runs on whichever capture worker called `put` — inline, that took a capture slot out of service for the whole pass.
+
+The gap this opens is the bug it used to cause: cache paths are derived from the request, so a frame recaptured after eviction is written to the *same path* its pending delete targets. Deleting by path alone destroyed the fresh file while the index kept advertising it, and every later hit was a 500 (`FileNotFoundException` from Vert.x `sendFile`) until a restart. Two guards, both needed:
+
+- **`deleteFromDisk` skips a re-adopted key.** The check and the unlink run inside `compute` on the inner map, which holds the same bin lock `put` takes — so no `put` can land between them. `ImageCacheImplSuite` reproduces the sequence with a manual executor; verified to fail with a delete-by-path.
+- **`ImageCapture.findInCache` treats a missing file as a miss.** It drops the entry with `removeIfCurrent` (two-arg `remove`, so a concurrent fresh entry survives) and the caller recaptures. This covers what the first guard can't see — ffmpeg finished but not yet `put` — and files deleted from outside the process. Logged at WARN, so it's visible in production; a steady stream means something is still deleting under the cache.
+
+Recency is the third piece, and it changes *which* frames get evicted, not whether eviction is safe. `ImageCapture` `touch`es every hit that passes the existence check, so a frame in constant demand is no longer evicted just for being an early capture — and then recaptured mid-pass, the riskiest moment. Don't mistake it for a fix to the race above: a least-recently-used frame can still be requested during a pass. Two invariants keep it consistent with eviction:
+
+- **`touch` is conditional** (`replace(key, old, new)`). An unconditional `put` would resurrect an entry eviction already took, whose file may be about to go.
+- **`freeDisk` removes with `remove(key, j)`, not `remove(key)`.** A touch swaps the index before the queue, so eviction can poll an entry that has just been replaced. That element is skipped: the replacement owns the file, and `put`/`touch` already settled the bytes. Removing by key would evict the fresh entry from the index while leaving it in the queue.
 
 ### Deinterlacing
 

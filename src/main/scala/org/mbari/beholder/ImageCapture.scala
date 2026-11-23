@@ -100,7 +100,7 @@ class ImageCapture(
         deinterlace: Boolean = false
     ): Either[ErrorMsg, CachedImage] =
         val deinterlaced = resolveDeinterlace(videoUri, deinterlace, skipNonKeyFrames)
-        cache.get(videoUri, elapsedTime, imageType, deinterlaced) match
+        findInCache(videoUri, elapsedTime, imageType, deinterlaced) match
             case Some(cachedImage) => Right(cachedImage)
             case None              =>
                 val cachedImage =
@@ -166,7 +166,7 @@ class ImageCapture(
             try
                 // The previous leader for this frame may have finished and cached it between our
                 // cache lookup and our claim here, which would make this a needless second run.
-                val result = cache.get(cachedImage) match
+                val result = onDisk(cache.get(cachedImage)) match
                     case Some(alreadyCached) => Right(alreadyCached)
                     case None                => work
                 mine.complete(result)
@@ -222,13 +222,39 @@ class ImageCapture(
                         Left(StatusMsg(s"Failed to capture frame from $videoUri at $elapsedTime", 500))
                     case Success(value)     => Right(value)
 
+    /**
+     * Look a frame up in the cache, treating an entry whose file is missing as a miss.
+     *
+     * The index and the disk can disagree: a file removed by something outside this process, or a capture that wrote
+     * its frame just as an eviction pass deleted that path (see `ImageCacheImpl.deleteFromDisk`). Returning such an
+     * entry hands Vert.x a path it cannot open, which surfaces as a 500 -- and, since nothing else ever revisits the
+     * entry, the same 500 on every request for that frame until a restart. Dropping it here instead means the caller
+     * recaptures, and the cache heals on the first request that notices.
+     */
     def findInCache(
         videoUri: URI,
         elapsedTime: Duration,
         imageType: ImageType,
         deinterlace: Boolean
     ): Option[CachedImage] =
-        cache.get(videoUri, elapsedTime, imageType, deinterlace)
+        onDisk(cache.get(videoUri, elapsedTime, imageType, deinterlace))
+
+    /**
+     * Pass a cache hit through only if its file exists, refreshing it so eviction sees it as recently used; otherwise
+     * evict the entry and report a miss.
+     *
+     * A touch that finds the entry already evicted or replaced still serves the hit: the file was there a moment ago,
+     * which is no worse than before refreshing existed, and recapturing would spend an ffmpeg run to find out.
+     */
+    private def onDisk(hit: Option[CachedImage]): Option[CachedImage] =
+        hit.flatMap: image =>
+            if Files.exists(image.path) then cache.touch(image).orElse(Some(image))
+            else
+                // removeIfCurrent, not remove: a concurrent recapture may already have replaced this entry with a
+                // good one, and that one must survive.
+                if cache.removeIfCurrent(image) then
+                    log.atWarn.log(() => s"Cached file ${image.path} was missing from disk; dropped it from the cache")
+                None
 
 object ImageCapture:
 

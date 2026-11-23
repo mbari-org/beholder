@@ -52,6 +52,24 @@ trait ImageCache:
      */
     def remove(cachedImage: CachedImage): Option[CachedImage]
 
+    /**
+     * Remove `cachedImage` only if it is still the entry the cache holds for its key. Unlike [[remove]], this never
+     * discards a newer entry that replaced the one the caller looked at.
+     *
+     * @return
+     *   true if the entry was removed
+     */
+    def removeIfCurrent(cachedImage: CachedImage): Boolean
+
+    /**
+     * Record that `cachedImage` was just used, so eviction treats it as the newest entry.
+     *
+     * @return
+     *   the refreshed entry, or None if `cachedImage` was no longer the entry held for its key (already evicted, or
+     *   replaced by a newer capture)
+     */
+    def touch(cachedImage: CachedImage): Option[CachedImage]
+
     // -------------------------------
 
     def get(
