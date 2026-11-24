@@ -225,3 +225,52 @@ class ImageCaptureSuite extends LoggingFunSuite:
         assertEquals(grabs.get(), 2, "one capture per variant, not one for all twelve")
         assertTrue(s"Every caller should get an image, got $results", results.forall(_.isRight))
         assertEquals(results.map(_.map(_.path)).distinct.size, 2, "callers should get the variant they asked for")
+
+    // ---- cache entries whose file has vanished ----
+
+    /**
+     * Once the index claims a frame whose file is gone, serving it is a guaranteed 500 from Vert.x `sendFile` -- and
+     * nothing else ever revisits the entry. A hit has to notice and recapture instead.
+     */
+    test("a cached frame whose file was deleted is recaptured, not served"):
+        val grabs      = AtomicInteger(0)
+        val theCapture = freshCapture(countingGrabber(grabs, writeAFrame))
+        val elapsed    = Duration.ofMillis(31000)
+
+        val first = theCapture.capture(videoUri, elapsed).fold(e => fail(s"capture failed: $e"), identity)
+        Files.delete(first.path)
+
+        val second = theCapture.capture(videoUri, elapsed).fold(e => fail(s"recapture failed: $e"), identity)
+        assertEquals(grabs.get(), 2, "the missing file should have forced a second ffmpeg run")
+        assertEquals(second.path, first.path)
+        assertTrue("the recaptured file should be on disk", Files.exists(second.path))
+
+    /** The endpoint's fast path uses findInCache directly; it must not hand out a dead path either. */
+    test("findInCache reports a missing file as a miss and drops the entry"):
+        val grabs      = AtomicInteger(0)
+        val theCapture = freshCapture(countingGrabber(grabs, writeAFrame))
+        val elapsed    = Duration.ofMillis(32000)
+
+        val image = theCapture.capture(videoUri, elapsed).fold(e => fail(s"capture failed: $e"), identity)
+        assertTrue(theCapture.findInCache(videoUri, elapsed, ImageType.Jpeg, false).isDefined)
+
+        Files.delete(image.path)
+        assertEquals(theCapture.findInCache(videoUri, elapsed, ImageType.Jpeg, false), None)
+
+        // Put a file back without telling the cache: if the stale entry had merely been skipped rather than dropped,
+        // it would now be served again.
+        writeAFrame(image.path)
+        assertEquals(theCapture.findInCache(videoUri, elapsed, ImageType.Jpeg, false), None)
+
+    test("a cache hit refreshes the entry, so eviction sees it as recently used"):
+        val grabs      = AtomicInteger(0)
+        val theCapture = freshCapture(countingGrabber(grabs, writeAFrame))
+        val elapsed    = Duration.ofMillis(33000)
+
+        val captured = theCapture.capture(videoUri, elapsed).fold(e => fail(s"capture failed: $e"), identity)
+        Thread.sleep(2)
+        val hit      = theCapture.findInCache(videoUri, elapsed, ImageType.Jpeg, false).getOrElse(fail("expected a hit"))
+
+        assertEquals(grabs.get(), 1, "a hit must not recapture")
+        assertTrue(s"the hit should be stamped later than the capture", hit.created.isAfter(captured.created))
+        assertEquals(theCapture.findInCache(videoUri, elapsed, ImageType.Jpeg, false).map(_.path), Some(captured.path))

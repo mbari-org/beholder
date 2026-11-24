@@ -329,3 +329,104 @@ class ImageCacheImplSuite extends LoggingFunSuite:
         assertEquals(cache.totalImages, 2)
         cache.clearCache()
         assertEquals(cache.totalImages, 0)
+
+    // ---- deferred deletion ----
+
+    /** Holds eviction deletes until the test says to run them, so it can stage what happens in between. */
+    private class ManualExecutor extends java.util.concurrent.Executor:
+        private val pending                     = java.util.concurrent.ConcurrentLinkedQueue[Runnable]()
+        override def execute(r: Runnable): Unit = pending.add(r)
+        def runAll(): Unit                      = Iterator.continually(pending.poll()).takeWhile(_ != null).foreach(_.run())
+        def size: Int                           = pending.size()
+
+    /** A real file on disk, cached the way `ImageCapture` caches a fresh capture. */
+    private def cacheRealFile(cache: ImageCacheImpl, dir: java.nio.file.Path, i: Int): CachedImage =
+        val path = dir.resolve(s"frame_$i.jpg")
+        Files.write(path, Array.fill[Byte](1000)(1))
+        cache.put(CachedImage(videoUri, Duration.ofMillis(i * 100L), path, sizeBytes = Some(1000L)))
+
+    test("eviction deletes files off the putting thread"):
+        val dir     = Files.createTempDirectory(root, "evict_async_")
+        val deleter = ManualExecutor()
+        // 3000 bytes; a fourth 1000-byte frame overflows it and evicts the oldest
+        val cache   = ImageCacheImpl(dir, 0.003, .2, deleter) // 3000 bytes; overflowing by one frame frees one frame
+        val frames  = (0 until 4).map(cacheRealFile(cache, dir, _))
+
+        assertTrue("the oldest frame should be out of the index at once", cache.get(frames.head).isEmpty)
+        assertTrue("but put() must not have deleted it inline", Files.exists(frames.head.path))
+        assertEquals(deleter.size, 1)
+
+        deleter.runAll()
+        assertFalse("the deferred delete should remove it", Files.exists(frames.head.path))
+        frames.tail.foreach(f => assertTrue(Files.exists(f.path)))
+        cache.clearCache()
+
+    /**
+     * The production bug: a frame is evicted, recaptured to the same derived path before its deferred delete runs, and
+     * then the delete destroys the fresh file while the index still advertises it -- so every later hit is a 500.
+     */
+    test("an evicted frame recaptured before its delete runs keeps its new file"):
+        val dir     = Files.createTempDirectory(root, "evict_recapture_")
+        val deleter = ManualExecutor()
+        val cache   = ImageCacheImpl(dir, 0.003, .2, deleter) // 3000 bytes; overflowing by one frame frees one frame
+        val frames  = (0 until 4).map(cacheRealFile(cache, dir, _))
+        val evicted = frames.head
+        assertTrue(cache.get(evicted).isEmpty)
+
+        // Recapture: same request, so same path. The old file is still there (delete pending); overwrite it like
+        // ffmpeg -y would, and put the new entry.
+        Files.write(evicted.path, Array.fill[Byte](1000)(2))
+        cache.put(evicted.copy(sizeBytes = Some(1000L)))
+
+        deleter.runAll()
+
+        assertTrue("the recaptured frame should still be cached", cache.get(evicted).isDefined)
+        assertTrue("and its file must still exist", Files.exists(evicted.path))
+        cache.clearCache()
+
+    test("removeIfCurrent leaves a newer entry for the same key alone"):
+        val cache = ImageCacheImpl(root, 100, .3)
+        val path  = root.resolve(s"${getClass.getSimpleName}_removeIfCurrent.jpg").toAbsolutePath().normalize()
+        val older = cache.put(CachedImage(videoUri, Duration.ofMillis(4242), path, sizeBytes = Some(10L)))
+        Thread.sleep(2) // put stamps Instant.now(); make sure the two entries differ
+        val newer = cache.put(older.copy(sizeBytes = Some(20L)))
+
+        assertFalse("a stale reference must not remove the fresh entry", cache.removeIfCurrent(older))
+        assertEquals(cache.get(older), Some(newer))
+        assertTrue(cache.removeIfCurrent(newer))
+        assertTrue(cache.get(older).isEmpty)
+        cache.clearCache()
+
+    // ---- recency ----
+
+    test("a touched frame outlives older-captured frames nobody asked for"):
+        val dir     = Files.createTempDirectory(root, "touch_lru_")
+        val deleter = ManualExecutor()
+        val cache   = ImageCacheImpl(dir, 0.003, .2, deleter) // 3000 bytes; overflowing by one frame frees one frame
+        val frames  = (0 until 3).map(cacheRealFile(cache, dir, _))
+
+        Thread.sleep(2)              // put and touch both stamp Instant.now(); keep the touch strictly newest
+        assertTrue("touching a cached frame should succeed", cache.touch(frames.head).isDefined)
+        cacheRealFile(cache, dir, 3) // overflow: evicts one frame
+
+        assertTrue("the touched frame, though captured first, should survive", cache.get(frames(0)).isDefined)
+        assertTrue("the least recently used frame should be the one evicted", cache.get(frames(1)).isEmpty)
+        assertEquals(cache.totalImages, 3)
+        assertEquals(cache.currentCacheSizeMB, 0.003, 1e-9)
+        cache.clearCache()
+
+    test("touch does not resurrect an evicted or replaced entry"):
+        val cache = ImageCacheImpl(root, 100, .3)
+        val path  = root.resolve(s"${getClass.getSimpleName}_touch_stale.jpg").toAbsolutePath().normalize()
+        val older = cache.put(CachedImage(videoUri, Duration.ofMillis(5151), path, sizeBytes = Some(10L)))
+        Thread.sleep(2)
+        val newer = cache.put(older.copy(sizeBytes = Some(20L)))
+
+        assertEquals(cache.touch(older), None, "a replaced entry is not the one to refresh")
+        assertEquals(cache.get(older), Some(newer), "and the replacement must be left as it was")
+
+        cache.remove(newer)
+        assertEquals(cache.touch(newer), None, "an entry no longer cached cannot be touched")
+        assertTrue("touching must not put it back", cache.get(newer).isEmpty)
+        assertEquals(cache.totalImages, 0)
+        cache.clearCache()
